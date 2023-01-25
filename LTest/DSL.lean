@@ -61,9 +61,11 @@ macro (name := testcaseDecl)
       (arg[1].getId, arg[3].getId)
     dbg_trace s!"fixtures: {fixtures}"
 
-    -- This only works for testcases without fixtures.
-    let stx ← `(
-      def $name : IO TestResult := do
+    -- TODO: This only works for testcases without fixtures.
+
+    -- Create the testcase runner.
+    let runner ← `(
+      do
         let (out, err, result) ← @captureResult Unit
           $body
 
@@ -76,16 +78,21 @@ macro (name := testcaseDecl)
           stderr := err
           exception := exception
         }
+    )
+    -- Get the docstring as a term.
+    let doc := match doc? with
+      | none   => mkIdent `none
+      | some s => Syntax.mkStrLit s.getDocString
 
-      -- Register the testcase function. We call this with the name, it will be
-      -- resolved by the command.
+    -- Create the final TestcaseInfo structure and register it.
+    let stx ← `(
+      def $name : TestcaseInfo := {
+        doc := $doc
+        run := $runner
+      }
       _ltest_insert_testcase $name
     )
     return stx
-
-testcase a := do return
-testcase b := do return
-testcase c := do return
 
 
 /--

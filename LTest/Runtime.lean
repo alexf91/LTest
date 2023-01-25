@@ -63,6 +63,17 @@ structure TestResult where
 
 
 /--
+  Information about a testcase.
+
+  This structure contains meta data gathered during collection and the testrunner
+  with fixture setup and teardown.
+-/
+structure TestcaseInfo where
+  doc : Option String
+  run : IO TestResult
+
+
+/--
   Result type for captureResult to distinguish between exceptions and results.
 -/
 inductive ResultType (α : Type) where
