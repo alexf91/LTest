@@ -15,12 +15,9 @@
 --
 
 import LTest.Runtime
+import LTest.Extension
 import Lean
-import Lean.Meta
-import Lean.Parser
 open Lean
-open Lean.Meta
-open Lean.Parser
 
 
 set_option relaxedAutoImplicit false
@@ -51,7 +48,7 @@ syntax fixtureDependency := "(" ident ":" ident ")"
   ```
   The fixture part can be omitted if the testcase has no dependencies.
 -/
-scoped macro (name := testcaseDecl)
+macro (name := testcaseDecl)
   doc?:optional(docComment)                         -- Documentation
   "testcase"                                        -- Command name
   name:ident                                        -- Name of the testcase
@@ -79,8 +76,16 @@ scoped macro (name := testcaseDecl)
           stderr := err
           exception := exception
         }
+
+      -- Register the testcase function. We call this with the name, it will be
+      -- resolved by the command.
+      _ltest_insert_testcase $name
     )
     return stx
+
+testcase a := do return
+testcase b := do return
+testcase c := do return
 
 
 /--
@@ -101,7 +106,7 @@ scoped macro (name := testcaseDecl)
     teardown := do return
   ```
 -/
-scoped macro (name := fixtureDecl)
+macro (name := fixtureDecl)
   doc?:optional(docComment)                         -- Documentation
   "fixture"                                         -- Command name
   name:ident                                        -- Name of the fixture
