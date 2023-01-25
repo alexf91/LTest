@@ -14,7 +14,14 @@
 -- limitations under the License.
 --
 
-import LTest.Basic
-import LTest.DSL
-import LTest.Extension
-import LTest.Runtime
+import LTest
+open LTest
+
+
+/-- Define a simple testcase without requirements. -/
+testcase test_Foo := do
+  return
+
+
+/-! Generate the main function. -/
+#LTestMain

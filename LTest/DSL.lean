@@ -18,6 +18,9 @@ import LTest.Runtime
 import LTest.Extension
 import Lean
 open Lean
+open Lean.Meta
+open Lean.Elab.Command
+
 
 
 set_option relaxedAutoImplicit false
@@ -129,6 +132,33 @@ fixture FooBar Nat Nat requires (a : FixtureA) (b : FixtureB) where
   let a := 20
   return
 
+
+/--
+  Generate the main function and add it to the environment.
+
+  This can be used to compile tests and run them from the command line.
+-/
+elab "#LTestMain" : command => do
+  let env ← getEnv
+  logInfo s!"Generating LTest main function in module {env.mainModule}"
+
+  let testcases ← getTestcases
+
+  liftTermElabM do
+    -- TODO: Populate the list.
+    let empty ← mkListLit (mkConst ``TestcaseInfo) []
+
+    -- Add the main function to the environment.
+    let mainInfo ← getConstInfoDefn ``LTest.main
+    let mainValue := mainInfo.value.app empty
+    let mainType ← inferType mainValue
+
+    addAndCompile <|.defnDecl {
+      mainInfo with
+        name  := `main,
+        value := mainValue,
+        type  := mainType
+    }
 
 
 end LTest

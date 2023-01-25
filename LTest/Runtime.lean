@@ -108,4 +108,15 @@ def captureResult (x : IO α) : IO (String × String × ResultType α) := do
 
     return (out, err, r)
 
+
+/--
+  Prototype of the main function.
+
+  The first argument is set by the `#LTestMain` command and the compiler then
+  uses the remaining function as entry point.
+-/
+def main (testcases : List TestcaseInfo) (args : List String) : IO UInt32 := do
+  return 0
+
+
 end LTest
