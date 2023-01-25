@@ -14,6 +14,7 @@
 -- limitations under the License.
 --
 
+import LTest.Runtime
 import Lean
 open Lean
 open Lean.Elab
@@ -24,24 +25,26 @@ set_option relaxedAutoImplicit false
 
 namespace LTest
 
+
 /-
   Environment extension for discovery.
 -/
-initialize testcaseExtension : SimplePersistentEnvExtension Name NameSet ←
+initialize testcaseExtension : SimplePersistentEnvExtension Name (List Name) ←
   registerSimplePersistentEnvExtension {
-    addEntryFn    := NameSet.insert
-    addImportedFn := fun es => mkStateFromImportedEntries NameSet.insert {} es
+    addEntryFn    := List.concat
+    addImportedFn := mkStateFromImportedEntries List.concat {}
   }
 
 syntax (name := insertTestcase) "_ltest_insert_testcase " ident : command
-syntax (name := showTestcases) "show_testcases" : command
+syntax (name := showTestcases) "_ltest_show_testcases" : command
 
 /--
   Register a testcase with the extension.
 -/
 @[command_elab insertTestcase]
 def elabInsertTestcase : CommandElab := fun stx => do
-  modifyEnv fun env => testcaseExtension.addEntry env stx[1].getId
+  let name ← resolveGlobalConstNoOverload stx[1]
+  modifyEnv fun env => testcaseExtension.addEntry env name
 
 
 /--

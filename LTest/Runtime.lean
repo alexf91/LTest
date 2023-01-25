@@ -69,8 +69,8 @@ structure TestResult where
   with fixture setup and teardown.
 -/
 structure TestcaseInfo where
-  doc : Option String
-  run : IO TestResult
+  doc  : Option String
+  run  : IO TestResult
 
 
 /--
@@ -112,11 +112,22 @@ def captureResult (x : IO α) : IO (String × String × ResultType α) := do
 /--
   Prototype of the main function.
 
-  The first argument is set by the `#LTestMain` command and the compiler then
+  The first few arguments are set by the `#LTestMain` command and the compiler then
   uses the remaining function as entry point.
--/
-def main (testcases : List TestcaseInfo) (args : List String) : IO UInt32 := do
-  return 0
 
+  TODO: Combine the names and infos list.
+-/
+def main (names : List Name) (infos : List TestcaseInfo) (args : List String) : IO UInt32 := do
+  let testcases := List.zip names infos
+  let mut exitcode : UInt32 := 0
+
+  for (name, info) in testcases do
+    let result ← info.run
+    match result.exception with
+    | none   => IO.println s!"[PASS] {name}"
+    | some e => IO.println s!"[FAIL] {name}: {e}"
+                exitcode := 1
+
+  return exitcode
 
 end LTest

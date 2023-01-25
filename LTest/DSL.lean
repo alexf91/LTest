@@ -145,12 +145,17 @@ elab "#LTestMain" : command => do
   let testcases ← getTestcases
 
   liftTermElabM do
-    -- TODO: Populate the list.
-    let empty ← mkListLit (mkConst ``TestcaseInfo) []
+    -- Create the list of qualified testcase names.
+    let names ← mkListLit (mkConst ``Name) <| Array.toList <| testcases.map toExpr
+
+    -- Create the list of TestcaseInfo structures.
+    let infos ← mkListLit (mkConst ``TestcaseInfo) <| Array.toList <| ← testcases.mapM fun n => do
+      let info ← getConstInfo n
+      return info.value!
 
     -- Add the main function to the environment.
     let mainInfo ← getConstInfoDefn ``LTest.main
-    let mainValue := mainInfo.value.app empty
+    let mainValue := mainInfo.value.app names |>.app infos
     let mainType ← inferType mainValue
 
     addAndCompile <|.defnDecl {

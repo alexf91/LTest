@@ -19,8 +19,12 @@ open LTest
 
 
 /-- Define a simple testcase without requirements. -/
-testcase test_Foo := do
-  return
+testcase test_A := do return
+testcase test_B := do return
+testcase test_C := do return
+testcase test_D := do return
+testcase test_E := do return
+testcase test_F := do return
 
 
 /-! Generate the main function. -/
