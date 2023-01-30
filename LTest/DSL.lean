@@ -17,10 +17,11 @@
 import LTest.Runtime
 import LTest.Extension
 import Lean
+import Lean.Parser
 open Lean
 open Lean.Meta
 open Lean.Elab.Command
-
+open Lean.Parser
 
 
 set_option relaxedAutoImplicit false
@@ -30,7 +31,8 @@ namespace LTest
 /--
   Basic syntax elements used for the DSL.
 -/
-syntax fixtureDependency := "(" ident ":" ident ")"
+def fixtureDependency := leading_parser
+  "(" >> ident >> ":" >> ident >> ")"
 
 
 /--
@@ -57,14 +59,13 @@ macro (name := testcaseDecl)
   name:ident                                        -- Name of the testcase
   fixtures?:optional("requires" fixtureDependency+) -- Fixture arguments
   ":=" body:term : command => do
-    dbg_trace s!"name: {name.getId}"
-
     -- Get fixture requirements as `(Name × Name)` tuples.
     let fixtures :=  fixtures?.raw[1].getArgs.map fun arg =>
       (arg[1].getId, arg[3].getId)
-    dbg_trace s!"fixtures: {fixtures}"
 
     -- TODO: This only works for testcases without fixtures.
+    if !fixtures.isEmpty then
+      Macro.throwError "fixture dependencies not supported"
 
     -- Create the testcase runner.
     let runner ← `(
@@ -111,26 +112,65 @@ macro (name := testcaseDecl)
 
   ```
   fixture FixtureC σ α requires (a : FixtureA) (b : FixtureB) where
+    scope    := Scope.session | Scope.function
     default  := (object of type σ)
     setup    := do return (object of type α)
     teardown := do return
   ```
 -/
+def fixtureBinder := leading_parser
+  ident >> Term.binderDefault
+
+def fixtureFields := leading_parser
+  manyIndent <|
+    ppLine >> checkColGe >> ppGroup fixtureBinder
+
+/--
+  Check fields for errors.
+-/
+def checkFields (stx : TSyntax `LTest.fixtureFields) : MacroM Unit := do
+  let allowed := #[`scope, `default, `setup, `teardown]
+  let fields := stx.raw[0].getArgs.map fun s => s[0].getId
+
+  -- Check for invalid fields.
+  if let some invalid := fields.filter (!allowed.contains ·) |>.get? 0 then
+    Macro.throwError s!"'{invalid}' is not a valid field of a fixture"
+
+  -- Check for missing fields.
+  if let some missing := allowed.filter (!fields.contains ·) |>.get? 0 then
+    Macro.throwError s!"field missing from fixture: '{missing}'"
+
+  -- Check for duplicates.
+  let duplicates := allowed.filter fun a => (fields.filter (· == a) |>.size) != 1
+  if let some duplicate := duplicates.get? 0 then
+    Macro.throwError s!"duplicate field: '{duplicate}'"
+
+  dbg_trace duplicates
+
+
 macro (name := fixtureDecl)
   doc?:optional(docComment)                         -- Documentation
   "fixture"                                         -- Command name
   name:ident                                        -- Name of the fixture
-  state:ident                                       -- State type of the fixture
-  value:ident                                       -- Value type of the fixture
+  stateType:ident                                   -- State type of the fixture
+  valueType:ident                                   -- Value type of the fixture
   fixtures?:optional("requires" fixtureDependency+) -- Fixture arguments
-  "where"                                           -- Delimiter keyword
-  body:term : command => do
+  " where "                                         -- Delimiter keyword
+  fields:fixtureFields                              -- Fields
+  : command => do
+
+    -- Check if all fields exist.
+    checkFields fields
+
+    -- Get fixture requirements as `(Name × Name)` tuples.
+    let fixtures :=  fixtures?.raw[1].getArgs.map fun arg =>
+      (arg[1].getId, arg[3].getId)
+
+    -- TODO: This only works for fixtures without dependencies.
+    if !fixtures.isEmpty then
+      Macro.throwError "fixture dependencies not supported"
+
     return TSyntax.mk mkNullNode
-
-
-fixture FooBar Nat Nat requires (a : FixtureA) (b : FixtureB) where
-  let a := 20
-  return
 
 
 /--
