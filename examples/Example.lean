@@ -49,5 +49,10 @@ testcase testOne requires (a : One) :=
   IO.println s!"a: {a}"
 
 
+/-- No tests without assertions. -/
+testcase testSomething := do
+  assertTrue (0 == 0)
+
+
 /-! Generate the main function. -/
 #LTestMain

@@ -54,7 +54,7 @@ def createFixtureSetup (fixtures : List (Name × Name)) (body : TSyntax `term) :
     let default := mkIdent (fixture ++ `default)
 
     /- TODO: Update the state for teardown functions and capture the output and possible errors
-             during setup. -/
+             during setup and teardown. -/
     return ← `(
       let ($name, state) := ← $setup |>.run $default;
       $body

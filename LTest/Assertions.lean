@@ -14,8 +14,15 @@
 -- limitations under the License.
 --
 
-import LTest.Assertions
-import LTest.Basic
-import LTest.DSL
-import LTest.Extension
-import LTest.Runtime
+
+
+set_option relaxedAutoImplicit false
+
+
+namespace LTest
+
+def assertTrue (p : Bool) : IO Unit := do
+  unless p do
+    throw $ IO.userError "assertion failed"
+
+end LTest
