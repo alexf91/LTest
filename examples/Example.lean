@@ -47,5 +47,9 @@ fixture One Unit Nat requires (n : Zero) where
   teardown := do return
 
 
+testcase testOne requires (a : One) :=
+  IO.println s!"a: {a}"
+
+
 /-! Generate the main function. -/
 #LTestMain

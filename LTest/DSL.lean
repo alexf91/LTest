@@ -53,6 +53,9 @@ def createFixtureSetup (fixtures : List (Name × Name)) (body : TSyntax `term) :
     let name := mkIdent name
     let setup := mkIdent (fixture ++ `setup)
     let default := mkIdent (fixture ++ `default)
+
+    /- TODO: Update the state for teardown functions and capture the output and possible errors
+             during setup. -/
     return ← `(
       let ($name, state) := ← $setup |>.run $default;
       $body
@@ -191,23 +194,22 @@ macro (name := fixtureDecl)
         else
           none
 
-    let default := getField `default
-    let setup := getField `setup
+    let default  := getField `default
+    let setup    := getField `setup
     let teardown := getField `teardown
 
     -- Get fixture requirements as `(Name × Name)` tuples.
     let fixtures :=  fixtures?.raw[1].getArgs.map fun arg =>
       (arg[1].getId, arg[3].getId)
 
-    -- TODO: This only works for fixtures without dependencies.
-    if !fixtures.isEmpty then
-      Macro.throwError "fixture dependencies not supported"
+    -- Create the setup body with fixture initialization.
+    let setup ← createFixtureSetup fixtures.toList setup
 
     -- TODO: Keep track of the state.
     let stx ← `(
       def $name : FixtureInfo $stateType $valueType := {
         default  := $default
-        setup    := $setup
+        setup    := do return ← $setup
         teardown := $teardown
       }
     )
