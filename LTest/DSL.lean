@@ -36,6 +36,30 @@ def fixtureDependency := leading_parser
 
 
 /--
+  Construct the fixture setup terms for testcases and fixtures.
+
+  This calls the setup function of the fixture with the current state
+  and assigns the result to a variable.
+
+  TODO: Pass the current state instead of the default state.
+-/
+def createFixtureSetup (fixtures : List (Name × Name)) (body : TSyntax `term) : MacroM (TSyntax `term) := do
+  match fixtures with
+  | [] =>
+    return body
+  | (name, fixture)::fs =>
+    let body ← createFixtureSetup fs body
+
+    let name := mkIdent name
+    let setup := mkIdent (fixture ++ `setup)
+    let default := mkIdent (fixture ++ `default)
+    return ← `(
+      let ($name, state) := ← $setup |>.run $default;
+      $body
+    )
+
+
+/--
   Declare a testcase.
 
   The testcase declaration is transformed into a function that calls the appropriate fixture
@@ -60,17 +84,12 @@ macro (name := testcaseDecl)
   fixtures?:optional("requires" fixtureDependency+) -- Fixture arguments
   ":=" body:term : command => do
     -- Get fixture requirements as `(Name × Name)` tuples.
-    let fixtures :=  fixtures?.raw[1].getArgs.map fun arg =>
+    let fixtures := fixtures?.raw[1].getArgs.map fun arg =>
       (arg[1].getId, arg[3].getId)
-
-    -- TODO: This only works for testcases without fixtures.
-    if !fixtures.isEmpty then
-      Macro.throwError "fixture dependencies not supported"
 
     -- Create the body of the testcase and call the fixture setup function.
     -- The setup function might be called multiple times for each fixture.
-    let testBody := body
-    -- TODO: Finish
+    let testBody ← createFixtureSetup fixtures.toList body
 
     -- Create the testcase runner.
     let runner ← `(
@@ -187,8 +206,8 @@ macro (name := fixtureDecl)
     -- TODO: Keep track of the state.
     let stx ← `(
       def $name : FixtureInfo $stateType $valueType := {
-        default := $default
-        setup := $setup
+        default  := $default
+        setup    := $setup
         teardown := $teardown
       }
     )

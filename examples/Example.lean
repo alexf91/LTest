@@ -19,12 +19,32 @@ open LTest
 
 
 /-- Define a simple testcase without requirements. -/
-testcase test_A := do return
-testcase test_B := do return
-testcase test_C := do return
-testcase test_D := do return
-testcase test_E := do return
-testcase test_F := do return
+testcase testEmpty := do return
+
+
+/-- Define a fixture without a state that always returns 0. -/
+fixture Zero Unit Nat where
+  default := ()
+  setup := do return 0
+  teardown := do return
+
+
+/--
+  Define a testcase with fixture dependencies.
+
+  The body of the testcase can access `a` and `b` of type `Nat`.
+-/
+testcase testZero requires (a : Zero) (b : Zero) := do
+  IO.println s!"a: {a}"
+  IO.println s!"b: {b}"
+  return
+
+
+/-- Fixtures can also have dependencies. -/
+fixture One Unit Nat requires (n : Zero) where
+  default := ()
+  setup := do return n + 1
+  teardown := do return
 
 
 /-! Generate the main function. -/
