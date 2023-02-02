@@ -23,19 +23,6 @@ namespace LTest
 
 
 /--
-  Fixture scope.
-
-  This determines when the fixture setup and teardown code is called:
-  • For `session`, the fixture is initialized when it is first used and deinitialized
-    after the last test.
-  • For `function`, the fixture is initialized and deinitialized for every testcase.
--/
-inductive Scope where
-  | session
-  | function
-
-
-/--
   Fixture with a state of type `σ` and a value of type `α`.
 
   The state is updated by the `setup` and `teardown` functions, the value is passed
@@ -43,7 +30,6 @@ inductive Scope where
 -/
 structure Fixture (σ : Type) (α : Type) where
   doc      : Option String := none
-  scope    : Scope := .function
   default  : σ
   setup    : StateT σ IO α
   teardown : StateT σ IO Unit

@@ -112,7 +112,6 @@ macro (name := testcaseDecl)
 
   ```
   fixture FixtureC σ α requires (a : FixtureA) (b : FixtureB) where
-    scope    := Scope.session | Scope.function
     default  := (object of type σ)
     setup    := do return (object of type α)
     teardown := do return
@@ -129,7 +128,7 @@ def fixtureFields := leading_parser
   Check fields for errors.
 -/
 def checkFields (stx : TSyntax `LTest.fixtureFields) : MacroM Unit := do
-  let allowed := #[`scope, `default, `setup, `teardown]
+  let allowed := #[`default, `setup, `teardown]
   let fields := stx.raw[0].getArgs.map fun s => s[0].getId
 
   -- Check for invalid fields.
