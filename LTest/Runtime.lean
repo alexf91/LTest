@@ -28,7 +28,7 @@ namespace LTest
   The state is updated by the `setup` and `teardown` functions, the value is passed
   to a testcase or another fixture that depends on the fixture.
 -/
-structure Fixture (σ : Type) (α : Type) where
+structure FixtureInfo (σ : Type) (α : Type) where
   doc      : Option String := none
   default  : σ
   setup    : StateT σ IO α

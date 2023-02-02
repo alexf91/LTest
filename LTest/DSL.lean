@@ -67,11 +67,16 @@ macro (name := testcaseDecl)
     if !fixtures.isEmpty then
       Macro.throwError "fixture dependencies not supported"
 
+    -- Create the body of the testcase and call the fixture setup function.
+    -- The setup function might be called multiple times for each fixture.
+    let testBody := body
+    -- TODO: Finish
+
     -- Create the testcase runner.
     let runner ← `(
       do
         let (out, err, result) ← @captureResult Unit
-          $body
+          $testBody
 
         let exception := match result with
         | .result _    => none
@@ -144,8 +149,6 @@ def checkFields (stx : TSyntax `LTest.fixtureFields) : MacroM Unit := do
   if let some duplicate := duplicates.get? 0 then
     Macro.throwError s!"duplicate field: '{duplicate}'"
 
-  dbg_trace duplicates
-
 
 macro (name := fixtureDecl)
   doc?:optional(docComment)                         -- Documentation
@@ -161,6 +164,18 @@ macro (name := fixtureDecl)
     -- Check if all fields exist.
     checkFields fields
 
+    -- Find the terms for the fields we need. We already ensured that they exist.
+    let getField (name : Name) : TSyntax `term :=
+      fields.raw[0].getArgs.findSome! fun f =>
+        if f[0].getId == name then
+          some $ TSyntax.mk f[1][1]
+        else
+          none
+
+    let default := getField `default
+    let setup := getField `setup
+    let teardown := getField `teardown
+
     -- Get fixture requirements as `(Name × Name)` tuples.
     let fixtures :=  fixtures?.raw[1].getArgs.map fun arg =>
       (arg[1].getId, arg[3].getId)
@@ -169,7 +184,15 @@ macro (name := fixtureDecl)
     if !fixtures.isEmpty then
       Macro.throwError "fixture dependencies not supported"
 
-    return TSyntax.mk mkNullNode
+    -- TODO: Keep track of the state.
+    let stx ← `(
+      def $name : FixtureInfo $stateType $valueType := {
+        default := $default
+        setup := $setup
+        teardown := $teardown
+      }
+    )
+    return TSyntax.mk stx
 
 
 /--
