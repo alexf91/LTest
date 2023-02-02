@@ -34,7 +34,6 @@ namespace LTest
 def fixtureDependency := leading_parser
   "(" >> ident >> ":" >> ident >> ")"
 
-
 /--
   Construct the fixture setup terms for testcases and fixtures.
 
@@ -186,6 +185,11 @@ macro (name := fixtureDecl)
   fields:fixtureFields                              -- Fields
   : command => do
 
+    -- Get the docstring as a term.
+    let doc := match doc? with
+      | none   => mkIdent `none
+      | some s => Syntax.mkStrLit s.getDocString
+
     -- Check if all fields exist.
     checkFields fields
 
@@ -213,6 +217,7 @@ macro (name := fixtureDecl)
     -- TODO: Keep track of the state.
     let stx ← `(
       def $name : FixtureInfo $stateType $valueType := {
+        doc      := $doc
         default  := $default
         setup    := do return ← $setup
         teardown := $teardown
