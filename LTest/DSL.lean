@@ -155,8 +155,11 @@ def fixtureFields := leading_parser
   Check fields for errors.
 -/
 def checkFields (stx : TSyntax `LTest.fixtureFields) : MacroM Unit := do
-  let allowed := #[`default, `setup, `teardown]
+  let allowed := #[`default, `setup] --, `teardown]
   let fields := stx.raw[0].getArgs.map fun s => s[0].getId
+
+  if fields.contains `teardown then
+    Macro.throwError s!"teardown functions are not supported"
 
   -- Check for invalid fields.
   if let some invalid := fields.filter (!allowed.contains ·) |>.get? 0 then
@@ -196,7 +199,9 @@ macro (name := fixtureDecl)
 
     let default  := getField `default
     let setup    := getField `setup
-    let teardown := getField `teardown
+    -- TODO: Teardown not supported
+    --let teardown := getField `teardown
+    let teardown  ← `(do return)
 
     -- Get fixture requirements as `(Name × Name)` tuples.
     let fixtures :=  fixtures?.raw[1].getArgs.map fun arg =>

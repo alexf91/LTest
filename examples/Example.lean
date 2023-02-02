@@ -26,7 +26,6 @@ testcase testEmpty := do return
 fixture Zero Unit Nat where
   default := ()
   setup := do return 0
-  teardown := do return
 
 
 /--
@@ -44,7 +43,6 @@ testcase testZero requires (a : Zero) (b : Zero) := do
 fixture One Unit Nat requires (n : Zero) where
   default := ()
   setup := do return n + 1
-  teardown := do return
 
 
 testcase testOne requires (a : One) :=
