@@ -1,1 +1,1 @@
-# Unit testing framework for Lean 4
+# Fixture-based test framework for Lean 4
