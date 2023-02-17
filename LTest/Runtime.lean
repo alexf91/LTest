@@ -66,6 +66,15 @@ inductive ResultType (α : Type) where
   | result (r : α)
   | exception (msg : String)
 
+namespace ResultType
+
+  def result! [Inhabited α] (r : ResultType α) : α :=
+    match r with
+    | .result r => r
+    | _ => panic! "not a valid result"
+
+end ResultType
+
 
 open ResultType in
 /--
@@ -74,7 +83,7 @@ open ResultType in
   This is taken from withIsolatedStreams in Lean/System/IO.lean and
   modified to split stdout and stderr.
 -/
-def captureResult (x : IO α) : IO (String × String × ResultType α) := do
+def captureResult {α : Type} (x : IO α) : IO (String × String × ResultType α) := do
     let bIn  ← IO.mkRef { : IO.FS.Stream.Buffer }
     let bOut ← IO.mkRef { : IO.FS.Stream.Buffer }
     let bErr ← IO.mkRef { : IO.FS.Stream.Buffer }

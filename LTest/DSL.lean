@@ -49,14 +49,17 @@ def createFixtureSetup (fixtures : List (Name × Name)) (body : TSyntax `term) :
   | (name, fixture)::fs =>
     let body ← createFixtureSetup fs body
 
-    let name := mkIdent name
-    let setup := mkIdent (fixture ++ `setup)
-    let default := mkIdent (fixture ++ `default)
+    let state    := mkIdent (name.appendAfter "✝")
+    let name     := mkIdent name
+    let setup    := mkIdent (fixture ++ `setup)
+    let teardown := mkIdent (fixture ++ `teardown)
+    let default  := mkIdent (fixture ++ `default)
 
     /- TODO: Update the state for teardown functions and capture the output and possible errors
              during setup and teardown. -/
     return ← `(
-      let ($name, state) := ← $setup |>.run $default;
+      let (out, err, result) := ← captureResult do ($setup |>.run $default);
+      let ($name, $state) := result.result!;
       $body
     )
 
@@ -157,6 +160,7 @@ def checkFields (stx : TSyntax `LTest.fixtureFields) : MacroM Unit := do
   let allowed := #[`default, `setup] --, `teardown]
   let fields := stx.raw[0].getArgs.map fun s => s[0].getId
 
+  -- TODO: Allow teardown
   if fields.contains `teardown then
     Macro.throwError s!"teardown functions are not supported"
 
@@ -203,9 +207,7 @@ macro (name := fixtureDecl)
 
     let default  := getField `default
     let setup    := getField `setup
-    -- TODO: Teardown not supported
-    --let teardown := getField `teardown
-    let teardown  ← `(do return)
+    let teardown := getField `teardown
 
     -- Get fixture requirements as `(Name × Name)` tuples.
     let fixtures :=  fixtures?.raw[1].getArgs.map fun arg =>
