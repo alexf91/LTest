@@ -42,18 +42,18 @@ testcase testZero requires (a : Zero) (b : Zero) := do
   IO.println s!"b: {b}"
 
 
-/-- Fixtures can also have dependencies. -/
-fixture One Unit Nat requires (n : Zero) where
-  default := ()
-  setup := do
-    IO.println "One.setup"
-    return n + 1
-  teardown := do
-    IO.println "One.teardown"
-
-
-testcase testOne requires (a : One) :=
-  IO.println s!"a: {a}"
+-- /-- Fixtures can also have dependencies. -/
+-- fixture One Unit Nat requires (n : Zero) where
+--   default := ()
+--   setup := do
+--     IO.println "One.setup"
+--     return n + 1
+--   teardown := do
+--     IO.println "One.teardown"
+--
+--
+-- testcase testOne requires (a : One) :=
+--   IO.println s!"a: {a}"
 
 
 /-- No tests without assertions. -/

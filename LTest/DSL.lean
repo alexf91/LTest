@@ -35,19 +35,17 @@ def fixtureDependency := leading_parser
   "(" >> ident >> ":" >> ident >> ")"
 
 /--
-  Construct the fixture setup terms for testcases and fixtures.
+  Construct the fixture setup and teardown code around the testbody.
 
   This calls the setup function of the fixture with the current state
   and assigns the result to a variable.
-
-  TODO: Pass the current state instead of the default state.
 -/
-def createTestcase (fixtures : List (Name × Name)) (body : TSyntax `term) : MacroM (TSyntax `term) := do
+def createTestHarness (fixtures : List (Name × Name)) (body : TSyntax `term) : MacroM (TSyntax `term) := do
   match fixtures with
   | [] =>
     return body
   | (name, fixture)::fs =>
-    let body ← createTestcase fs body
+    let body ← createTestHarness fs body
 
     let state    := mkIdent (name.appendAfter ".state✝")
     let name     := mkIdent name
@@ -62,8 +60,23 @@ def createTestcase (fixtures : List (Name × Name)) (body : TSyntax `term) : Mac
         let ($name, $state) := ← ($setup |>.run $default);
         ($body)
         discard <| ($teardown |>.run $state)
-      finally
-        pure ()
+      catch err =>
+        IO.println s!"TODO: report fixture error: {err}"
+    )
+
+
+/--
+  Wrap the testcase in a try/catch block and report errors.
+
+  TODO: Actually report the result and capture output.
+-/
+def createTestBody (body : TSyntax `term) : MacroM (TSyntax `term) := do
+    return ← `(
+      do
+        try
+          ($body)
+        catch err =>
+          IO.println s!"TODO: report testcase error: {err}"
     )
 
 
@@ -95,15 +108,16 @@ macro (name := testcaseDecl)
     let fixtures := fixtures?.raw[1].getArgs.map fun arg =>
       (arg[1].getId, arg[3].getId)
 
-    -- Create the body of the testcase and call the fixture setup function.
-    -- The setup function might be called multiple times for each fixture.
-    let testBody ← createTestcase fixtures.toList body
+    -- Wrap the test body in a try/catch block and then create the surrounding fixture block,
+    -- also in nested try/catch blocks.
+    let testBody ← createTestBody body
+    let testRunner ← createTestHarness fixtures.toList testBody
 
     -- Create the testcase runner.
     let runner ← `(
       do
         let (out, err, result) ← @captureResult Unit
-          $testBody
+          $testRunner
 
         let exception := match result with
         | .result _    => none
@@ -183,7 +197,7 @@ macro (name := fixtureDecl)
   name:ident                                        -- Name of the fixture
   stateType:ident                                   -- State type of the fixture
   valueType:ident                                   -- Value type of the fixture
-  fixtures?:optional("requires" fixtureDependency+) -- Fixture arguments
+  --fixtures?:optional("requires" fixtureDependency+) -- Fixture arguments
   " where "                                         -- Delimiter keyword
   fields:fixtureFields                              -- Fields
   : command => do
@@ -209,13 +223,12 @@ macro (name := fixtureDecl)
     let teardown := getField `teardown
 
     -- Get fixture requirements as `(Name × Name)` tuples.
-    let fixtures :=  fixtures?.raw[1].getArgs.map fun arg =>
-      (arg[1].getId, arg[3].getId)
+    --let fixtures :=  fixtures?.raw[1].getArgs.map fun arg =>
+    --  (arg[1].getId, arg[3].getId)
 
     -- Create the setup body with fixture initialization.
     --let setup ← createFixtureSetup fixtures.toList setup
 
-    -- TODO: Keep track of the state.
     let stx ← `(
       def $name : FixtureInfo $stateType $valueType := {
         doc      := $doc
