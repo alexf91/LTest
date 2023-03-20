@@ -25,8 +25,11 @@ testcase testEmpty := do return
 /-- Define a fixture without a state that always returns 0. -/
 fixture Zero Unit Nat where
   default := ()
-  setup := do return 0
-  --teardown := do return
+  setup := do
+    IO.println "Zero.setup"
+    return 0
+  teardown := do
+    IO.println "Zero.teardown"
 
 
 /--
@@ -42,8 +45,11 @@ testcase testZero requires (a : Zero) (b : Zero) := do
 /-- Fixtures can also have dependencies. -/
 fixture One Unit Nat requires (n : Zero) where
   default := ()
-  setup := do return n + 1
-  --teardown := do return
+  setup := do
+    IO.println "One.setup"
+    return n + 1
+  teardown := do
+    IO.println "One.teardown"
 
 
 testcase testOne requires (a : One) :=

@@ -42,14 +42,14 @@ def fixtureDependency := leading_parser
 
   TODO: Pass the current state instead of the default state.
 -/
-def createFixtureSetup (fixtures : List (Name × Name)) (body : TSyntax `term) : MacroM (TSyntax `term) := do
+def createTestcase (fixtures : List (Name × Name)) (body : TSyntax `term) : MacroM (TSyntax `term) := do
   match fixtures with
   | [] =>
     return body
   | (name, fixture)::fs =>
-    let body ← createFixtureSetup fs body
+    let body ← createTestcase fs body
 
-    let state    := mkIdent (name.appendAfter "✝")
+    let state    := mkIdent (name.appendAfter ".state✝")
     let name     := mkIdent name
     let setup    := mkIdent (fixture ++ `setup)
     let teardown := mkIdent (fixture ++ `teardown)
@@ -58,9 +58,12 @@ def createFixtureSetup (fixtures : List (Name × Name)) (body : TSyntax `term) :
     /- TODO: Update the state for teardown functions and capture the output and possible errors
              during setup and teardown. -/
     return ← `(
-      let (out, err, result) := ← captureResult do ($setup |>.run $default);
-      let ($name, $state) := result.result!;
-      $body
+      try
+        let ($name, $state) := ← ($setup |>.run $default);
+        ($body)
+        discard <| ($teardown |>.run $state)
+      finally
+        pure ()
     )
 
 
@@ -94,7 +97,7 @@ macro (name := testcaseDecl)
 
     -- Create the body of the testcase and call the fixture setup function.
     -- The setup function might be called multiple times for each fixture.
-    let testBody ← createFixtureSetup fixtures.toList body
+    let testBody ← createTestcase fixtures.toList body
 
     -- Create the testcase runner.
     let runner ← `(
@@ -157,12 +160,8 @@ def fixtureFields := leading_parser
   Check fields for errors.
 -/
 def checkFields (stx : TSyntax `LTest.fixtureFields) : MacroM Unit := do
-  let allowed := #[`default, `setup] --, `teardown]
+  let allowed := #[`default, `setup, `teardown]
   let fields := stx.raw[0].getArgs.map fun s => s[0].getId
-
-  -- TODO: Allow teardown
-  if fields.contains `teardown then
-    Macro.throwError s!"teardown functions are not supported"
 
   -- Check for invalid fields.
   if let some invalid := fields.filter (!allowed.contains ·) |>.get? 0 then
@@ -214,14 +213,14 @@ macro (name := fixtureDecl)
       (arg[1].getId, arg[3].getId)
 
     -- Create the setup body with fixture initialization.
-    let setup ← createFixtureSetup fixtures.toList setup
+    --let setup ← createFixtureSetup fixtures.toList setup
 
     -- TODO: Keep track of the state.
     let stx ← `(
       def $name : FixtureInfo $stateType $valueType := {
         doc      := $doc
         default  := $default
-        setup    := do return ← $setup
+        setup    := $setup
         teardown := $teardown
       }
     )
