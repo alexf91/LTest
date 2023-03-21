@@ -58,43 +58,20 @@ structure TestcaseInfo where
   doc  : Option String
   run  : IO TestResult
 
-
-/--
-  Result type for captureResult to distinguish between exceptions and results.
--/
-inductive ResultType (α : Type) where
-  | result (r : α)
-  | exception (msg : String)
-
-namespace ResultType
-
-  def result! [Inhabited α] (r : ResultType α) : α :=
-    match r with
-    | .result r => r
-    | _ => panic! "not a valid result"
-
-end ResultType
-
-
-open ResultType in
 /--
   Capture stdout, stderr and exceptions.
 
   This is taken from withIsolatedStreams in Lean/System/IO.lean and
   modified to split stdout and stderr.
 -/
-def captureResult {α : Type} (x : IO α) : IO (String × String × ResultType α) := do
+def captureResult {α : Type} (x : IO α) : IO (String × String × α) := do
     let bIn  ← IO.mkRef { : IO.FS.Stream.Buffer }
     let bOut ← IO.mkRef { : IO.FS.Stream.Buffer }
     let bErr ← IO.mkRef { : IO.FS.Stream.Buffer }
 
-    let mut r := exception "unknown exception"
-    try
-      r := result (← IO.withStdin  (IO.FS.Stream.ofBuffer bIn)  <|
-                     IO.withStdout (IO.FS.Stream.ofBuffer bOut) <|
-                     IO.withStderr (IO.FS.Stream.ofBuffer bErr) x)
-    catch exc =>
-      r := exception exc.toString
+    let r := (← IO.withStdin  (IO.FS.Stream.ofBuffer bIn)  <|
+            IO.withStdout (IO.FS.Stream.ofBuffer bOut) <|
+            IO.withStderr (IO.FS.Stream.ofBuffer bErr) x)
 
     let bOut ← liftM (m := BaseIO) bOut.get
     let bErr ← liftM (m := BaseIO) bErr.get

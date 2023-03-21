@@ -34,49 +34,51 @@ namespace LTest
 def fixtureDependency := leading_parser
   "(" >> ident >> ":" >> ident >> ")"
 
-/--
-  Construct the fixture setup and teardown code around the testbody.
-
-  This calls the setup function of the fixture with the current state
-  and assigns the result to a variable.
--/
-def createTestHarness (fixtures : List (Name × Name)) (body : TSyntax `term) : MacroM (TSyntax `term) := do
-  match fixtures with
-  | [] =>
-    return body
-  | (name, fixture)::fs =>
-    let body ← createTestHarness fs body
-
-    let state    := mkIdent (name.appendAfter ".state✝")
-    let name     := mkIdent name
-    let setup    := mkIdent (fixture ++ `setup)
-    let teardown := mkIdent (fixture ++ `teardown)
-    let default  := mkIdent (fixture ++ `default)
-
-    /- TODO: Update the state for teardown functions and capture the output and possible errors
-             during setup and teardown. -/
-    return ← `(
-      try
-        let ($name, $state) := ← ($setup |>.run $default);
-        ($body)
-        discard <| ($teardown |>.run $state)
-      catch err =>
-        IO.println s!"TODO: report fixture error: {err}"
-    )
-
 
 /--
-  Wrap the testcase in a try/catch block and report errors.
+  Create the testrunner.
 
-  TODO: Actually report the result and capture output.
+  This creates the runner for the testcase itself and the setup and teardown code of fixtures.
 -/
-def createTestBody (body : TSyntax `term) : MacroM (TSyntax `term) := do
-    return ← `(
-      do
+def createTestRunner (fixtures : List (Name × Name)) (body : TSyntax `term) : MacroM (TSyntax `term) := do
+  let testBody ← createTestBody body
+  let testRunner ← createTestHarness fixtures testBody
+  return ← `(
+    do
+      let mut ($result) : Option IO.Error := none
+      $testRunner
+      return $result
+  )
+where
+  result := mkIdent (`result |>.appendAfter "✝")
+  createTestHarness (fixtures : List (Name × Name)) (body : TSyntax `Lean.Parser.Term.doSeqItem) : MacroM (TSyntax `Lean.Parser.Term.doSeqItem) := do
+    match fixtures with
+    | [] =>
+      return body
+    | (name, fixture)::fs =>
+      let body ← createTestHarness fs body
+
+      let state    := mkIdent (name.appendAfter "'✝")
+      let name     := mkIdent name
+      let setup    := mkIdent (fixture ++ `setup)
+      let teardown := mkIdent (fixture ++ `teardown)
+      let default  := mkIdent (fixture ++ `default)
+
+      return ← `(Term.doSeqItem|
         try
-          ($body)
+          let ($name, $state) := ← ($setup |>.run $default);
+          $body
+          discard <| ($teardown |>.run $state)
         catch err =>
-          IO.println s!"TODO: report testcase error: {err}"
+          IO.eprintln s!"[FAIL] Error in fixture: {err}"
+      )
+
+  createTestBody (body : TSyntax `term) : MacroM (TSyntax `Lean.Parser.Term.doSeqItem) := do
+    return ← `(Term.doSeqItem|
+      try
+        ($body)
+      catch err =>
+        ($result) := some err
     )
 
 
@@ -110,18 +112,17 @@ macro (name := testcaseDecl)
 
     -- Wrap the test body in a try/catch block and then create the surrounding fixture block,
     -- also in nested try/catch blocks.
-    let testBody ← createTestBody body
-    let testRunner ← createTestHarness fixtures.toList testBody
+    let testRunner ← createTestRunner fixtures.toList body
 
     -- Create the testcase runner.
     let runner ← `(
       do
-        let (out, err, result) ← @captureResult Unit
+        let (out, err, result) ← captureResult
           $testRunner
 
         let exception := match result with
-        | .result _    => none
-        | .exception s => some s
+        | none   => none
+        | some e => some e.toString
 
         return {
           stdout := out
