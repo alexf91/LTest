@@ -1,0 +1,136 @@
+#!/usr/bin/env python
+#
+# Copyright 2023 Alexander Fasching
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
+#
+
+import argparse
+import difflib
+import logging
+import os
+import pathlib
+import re
+import subprocess as sp
+import sys
+import tempfile
+import yaml
+
+
+SCRIPTDIR = pathlib.PosixPath(os.path.dirname(__file__))
+LEVELS = {
+    "DEBUG": logging.DEBUG,
+    "INFO": logging.INFO,
+    "WARNING": logging.WARNING,
+    "WARN": logging.WARN,
+    "ERROR": logging.ERROR,
+    "FATAL": logging.FATAL,
+    "CRITICAL": logging.CRITICAL,
+}
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--log-level",
+        choices=LEVELS,
+        default="INFO",
+        help="Level of messages to display",
+    )
+    args = parser.parse_args()
+    FORMAT = "[%(levelname)s] %(name)s: %(message)s"
+    logging.basicConfig(level=LEVELS[args.log_level.upper()], format=FORMAT)
+
+    SCRIPTDIR.cwd()
+    sp.run(["lake", "update"])
+    sp.run(["lake", "clean"])
+
+    testdir = pathlib.PosixPath(tempfile.mkdtemp(prefix="LTest."))
+    logging.info(f"Running in {testdir}")
+
+    exitcode = 0
+    for target in [t for t in os.listdir(SCRIPTDIR) if re.match(r"test_.*\.lean", t)]:
+        target = os.path.splitext(target)[0]
+        log = logging.getLogger(target)
+
+        sp.run(["lake", "build", target], capture_output=True)
+
+        targetdir = testdir / target
+        targetdir.mkdir()
+        targetdir.cwd()
+
+        # Load the expected result.
+        try:
+            with open(f"{target}.yaml") as fp:
+                expected = yaml.safe_load(fp)
+        except FileNotFoundError:
+            expected = dict()
+
+        # Run the command and get the output.
+        r = sp.run(
+            [SCRIPTDIR / "build" / "bin" / target],
+            capture_output=True,
+            cwd=targetdir,
+        )
+        try:
+            with open(targetdir / "trace") as fp:
+                r.trace = fp.read()
+        except FileNotFoundError:
+            r.trace = None
+
+        # Compare returncode
+        if (returncode := expected.get("exitcode")) is not None:
+            if r.returncode != returncode:
+                log.error("exitcode mismatch")
+                exitcode = 1
+            else:
+                log.debug("exitcode match")
+        else:
+            log.debug("exitcode unspecified")
+
+        # Compare stdout
+        if (stdout := expected.get("stdout")) is not None:
+            if r.stdout != stdout:
+                log.error("stdout mismatch")
+                exitcode = 1
+            else:
+                log.debug("stdout match")
+        else:
+            log.debug("stdout unspecified")
+
+        # Compare stderr
+        if (stderr := expected.get("stderr")) is not None:
+            if r.stderr != stderr:
+                log.error("stderr mismatch")
+                exitcode = 1
+            else:
+                log.debug("stderr match")
+        else:
+            log.debug("stderr unspecified")
+
+        # Compare trace
+        if (trace := expected.get("trace")) is not None:
+            if r.trace != trace:
+                log.error("trace mismatch")
+                exitcode = 1
+            else:
+                log.debug("trace match")
+        else:
+            log.debug("trace unspecified")
+
+    return exitcode
+
+
+if __name__ == "__main__":
+    sys.exit(main())

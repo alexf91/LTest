@@ -1,7 +1,0 @@
-A.setup
-B.setup
-C.setup
-testcase
-C.teardown
-B.teardown
-A.teardown
