@@ -22,4 +22,24 @@ set_option relaxedAutoImplicit false
 
 namespace LTest
 
+/--
+  Create a temporary directory and delete it after the test is finished.
+-/
+fixture TempDir (Option System.FilePath) System.FilePath where
+  default := none
+  setup := do
+    let output ← IO.Process.run {
+      cmd := "mktemp"
+      args := #["-d", "--tmpdir", "LTest.tempdir.XXXXXXXXXX"]
+    }
+    let path := System.FilePath.mk output.trim
+    set $ some path
+    return path
+  teardown := do
+    if let some path ← get then
+      discard $ IO.Process.run {
+        cmd := "rm"
+        args := #["-rf", path.toString]
+      }
+
 end LTest
