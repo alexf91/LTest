@@ -48,6 +48,12 @@ def excepthook(type, value, traceback):
 sys.excepthook = excepthook
 
 
+def diff(a, b):
+    """Create a diff between a and b."""
+    lines = difflib.unified_diff(a.splitlines(), b.splitlines(), lineterm="")
+    return "\n".join(list(lines)[2:])
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -120,6 +126,7 @@ def main():
         if (stdout := expected.get("stdout")) is not None:
             if r.stdout != stdout:
                 log.error("stdout mismatch")
+                print(diff(r.stdout, stdout))
                 exitcode = 1
             else:
                 log.debug("stdout match")
@@ -130,6 +137,7 @@ def main():
         if (stderr := expected.get("stderr")) is not None:
             if r.stderr != stderr:
                 log.error("stderr mismatch")
+                print(diff(r.stderr, stderr))
                 exitcode = 1
             else:
                 log.debug("stderr match")
@@ -140,6 +148,7 @@ def main():
         if (trace := expected.get("trace")) is not None:
             if r.trace != trace:
                 log.error("trace mismatch")
+                print(diff(r.trace, trace))
                 exitcode = 1
             else:
                 log.debug("trace match")
