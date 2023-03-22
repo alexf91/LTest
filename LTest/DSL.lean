@@ -172,6 +172,15 @@ def fixtureFields := leading_parser
   manyIndent <|
     ppLine >> checkColGe >> ppGroup fixtureBinder
 
+def fixtureType := leading_parser
+  ("(" >> termParser >> ")") <|> (ident)
+
+def getFixtureType (stx : Syntax) : TSyntax `term :=
+  match stx.getNumArgs with
+  | 1 => TSyntax.mk $ stx.getArg 0
+  | 3 => TSyntax.mk $ stx.getArg 1
+  | _ => panic! "unknown syntax type"
+
 /--
   Check fields for errors.
 -/
@@ -197,8 +206,8 @@ macro (name := fixtureDecl)
   doc?:optional(docComment)                         -- Documentation
   "fixture"                                         -- Command name
   name:ident                                        -- Name of the fixture
-  stateType:ident                                   -- State type of the fixture
-  valueType:ident                                   -- Value type of the fixture
+  stateType:fixtureType                             -- State type of the fixture
+  valueType:fixtureType                             -- Value type of the fixture
   fixtures?:optional("requires" fixtureDependency+) -- Fixture arguments
   " where "                                         -- Delimiter keyword
   fields:fixtureFields                              -- Fields
@@ -234,6 +243,9 @@ macro (name := fixtureDecl)
 
     -- Create the setup body with fixture initialization.
     --let setup ← createFixtureSetup fixtures.toList setup
+
+    let stateType := getFixtureType stateType
+    let valueType := getFixtureType valueType
 
     let stx ← `(
       def $name : FixtureInfo $stateType $valueType := {

@@ -40,6 +40,14 @@ LEVELS = {
 }
 
 
+def excepthook(type, value, traceback):
+    logging.fatal(f"{value}")
+    sys.exit(1)
+
+
+sys.excepthook = excepthook
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -64,7 +72,12 @@ def main():
         target = os.path.splitext(target)[0]
         log = logging.getLogger(target)
 
-        sp.run(["lake", "build", target], capture_output=True)
+        try:
+            sp.run(["lake", "build", target], capture_output=True, check=True)
+        except sp.CalledProcessError:
+            log.error("lake failed")
+            exitcode = 1
+            continue
 
         targetdir = testdir / target
         targetdir.mkdir()
