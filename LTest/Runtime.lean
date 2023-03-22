@@ -44,8 +44,8 @@ structure FixtureInfo (σ : Type) (α : Type) where
 structure TestResult where
   stdout    : String
   stderr    : String
-  exception : Option String
-  deriving Repr
+  testcaseError : Option IO.Error
+  fixtureErrors : List IO.Error
 
 
 /--
@@ -95,10 +95,12 @@ def main (names : List Name) (infos : List TestcaseInfo) (args : List String) : 
 
   for (name, info) in testcases do
     let result ← info.run
-    match result.exception with
-    | none   => IO.println s!"[PASS] {name}"
-    | some e => IO.println s!"[FAIL] {name}: {e}"
-                exitcode := 1
+    match (result.testcaseError, result.fixtureErrors) with
+    | (none, [])   => IO.println s!"[PASS] {name}"
+    | (some e, []) => IO.println s!"[FAIL] {name}: {e}"
+                      exitcode := 1
+    | (_, _)       => IO.println s!"[ERROR] {name}: errors in fixture"
+                      exitcode := 1
 
   return exitcode
 

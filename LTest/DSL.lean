@@ -45,12 +45,14 @@ def createTestRunner (fixtures : List (Name × Name)) (body : TSyntax `term) : M
   let testRunner ← createTestHarness fixtures testBody
   return ← `(
     do
-      let mut ($result) : Option IO.Error := none
+      let mut ($testcaseError) : Option IO.Error := none
+      let mut ($fixtureErrors) : List IO.Error := []
       $testRunner
-      return $result
+      return ($testcaseError, $fixtureErrors)
   )
 where
-  result := mkIdent (`result |>.appendAfter "✝")
+  testcaseError := mkIdent (`testcaseError |>.appendAfter "✝")
+  fixtureErrors := mkIdent (`fixtureErrors |>.appendAfter "✝")
   createTestHarness fixtures body := do
     match fixtures with
     | [] =>
@@ -70,7 +72,9 @@ where
           $body
           discard <| ($teardown |>.run $state)
         catch err =>
-          IO.eprintln s!"[FAIL] Error in fixture: {err}"
+          -- This is an error in the setup or teardown function of the current fixture.
+          -- Everything in `body` has its own try/catch block.
+          ($fixtureErrors) := $fixtureErrors ++ [err]
       )
 
   createTestBody body := do
@@ -78,7 +82,7 @@ where
       try
         ($body)
       catch err =>
-        ($result) := some err
+        ($testcaseError) := some err
     )
 
 
@@ -117,17 +121,14 @@ macro (name := testcaseDecl)
     -- Create the testcase runner.
     let runner ← `(
       do
-        let (out, err, result) ← captureResult
+        let (out, err, (testcaseError, fixtureErrors)) ← captureResult
           $testRunner
-
-        let exception := match result with
-        | none   => none
-        | some e => some e.toString
 
         return {
           stdout := out
           stderr := err
-          exception := exception
+          testcaseError := testcaseError
+          fixtureErrors := fixtureErrors
         }
     )
     -- Get the docstring as a term.
