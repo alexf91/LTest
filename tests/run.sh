@@ -33,7 +33,7 @@ EXITCODE=0
 # Build and run every test_*.lean file.
 for file in $(ls test_*.lean); do
   TARGET=$(basename -s .lean $file)
-  lake build $TARGET &> /dev/null
+  lake build $TARGET
 
   mkdir "$WORKDIR/$TARGET"
   TEST="$PWD/build/bin/$TARGET"

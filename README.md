@@ -1,10 +1,12 @@
 # Fixture-based test framework for Lean 4
 
 `LTest` uses macros to define testcases and fixtures for testing IO functions in Lean 4.
+It is heavily inspired by [`pytest`](https://docs.pytest.org/) and [`rstest`](https://docs.rs/rstest).
+
 
 ## Fixtures
 
-Fixtures are structures with a default state, a setup-function and a teardown-function.
+Fixtures are structures with a default state, a setup function and a teardown function.
 They can depend on other fixtures. The value of dependencies is available in the setup function.
 
 If `AnotherFixture` has type `Fixture Foo Bar`, then `n` with type `Bar` is available in the
@@ -17,6 +19,8 @@ fixture NatFixture Nat Nat requires (n : AnotherFixture) where
   setup := do return 0
   teardown := do return
 ```
+
+**NOTE: Dependent fixtures are currently not supported.**
 
 
 ## Testcases

@@ -14,9 +14,33 @@
 -- limitations under the License.
 --
 
-import LTest.Assertions
-import LTest.Basic
-import LTest.DSL
-import LTest.Extension
-import LTest.Fixtures
-import LTest.Runtime
+/-
+  Run a failing testcase and check if teardowns are executed.
+-/
+
+import TestUtils
+import LTest
+open TestUtils
+open LTest
+
+
+fixture A Unit Unit where
+  default  := ()
+  setup    := do trace "A.setup"
+  teardown := do trace "A.teardown"
+
+fixture B Unit Unit where
+  default  := ()
+  setup    := do trace "B.setup"
+  teardown := do trace "B.teardown"
+
+fixture C Unit Unit where
+  default  := ()
+  setup    := do trace "C.setup"
+  teardown := do trace "C.teardown"
+
+testcase Foo requires (a : A) (b : B) (c : C) := do
+  trace "testcase"
+  throw $ IO.userError "Foo.failure"
+
+#LTestMain

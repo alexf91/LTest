@@ -14,8 +14,6 @@
 -- limitations under the License.
 --
 
-
-
 set_option relaxedAutoImplicit false
 
 
@@ -23,6 +21,14 @@ namespace LTest
 
 def assertTrue (p : Bool) : IO Unit := do
   unless p do
+    throw $ IO.userError "assertion failed"
+
+def assertFalse (p : Bool) : IO Unit := do
+  unless !p do
+    throw $ IO.userError "assertion failed"
+
+def assertEqual [BEq α] (a : α) (b : α): IO Unit := do
+  unless a == b do
     throw $ IO.userError "assertion failed"
 
 end LTest

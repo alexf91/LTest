@@ -14,9 +14,12 @@
 -- limitations under the License.
 --
 
-import LTest.Assertions
-import LTest.Basic
 import LTest.DSL
-import LTest.Extension
-import LTest.Fixtures
-import LTest.Runtime
+import Lean
+open Lean
+
+set_option relaxedAutoImplicit false
+
+namespace LTest
+
+end LTest

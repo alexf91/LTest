@@ -51,7 +51,7 @@ def createTestRunner (fixtures : List (Name × Name)) (body : TSyntax `term) : M
   )
 where
   result := mkIdent (`result |>.appendAfter "✝")
-  createTestHarness (fixtures : List (Name × Name)) (body : TSyntax `Lean.Parser.Term.doSeqItem) : MacroM (TSyntax `Lean.Parser.Term.doSeqItem) := do
+  createTestHarness fixtures body := do
     match fixtures with
     | [] =>
       return body
@@ -73,7 +73,7 @@ where
           IO.eprintln s!"[FAIL] Error in fixture: {err}"
       )
 
-  createTestBody (body : TSyntax `term) : MacroM (TSyntax `Lean.Parser.Term.doSeqItem) := do
+  createTestBody body := do
     return ← `(Term.doSeqItem|
       try
         ($body)
