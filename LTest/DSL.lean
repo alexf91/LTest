@@ -199,7 +199,7 @@ macro (name := fixtureDecl)
   name:ident                                        -- Name of the fixture
   stateType:ident                                   -- State type of the fixture
   valueType:ident                                   -- Value type of the fixture
-  --fixtures?:optional("requires" fixtureDependency+) -- Fixture arguments
+  fixtures?:optional("requires" fixtureDependency+) -- Fixture arguments
   " where "                                         -- Delimiter keyword
   fields:fixtureFields                              -- Fields
   : command => do
@@ -225,8 +225,12 @@ macro (name := fixtureDecl)
     let teardown := getField `teardown
 
     -- Get fixture requirements as `(Name × Name)` tuples.
-    --let fixtures :=  fixtures?.raw[1].getArgs.map fun arg =>
-    --  (arg[1].getId, arg[3].getId)
+    let fixtures :=  fixtures?.raw[1].getArgs.map fun arg =>
+      (arg[1].getId, arg[3].getId)
+
+    -- TODO: Support this.
+    if !fixtures.isEmpty then
+      Macro.throwError "fixture dependencies are not supported"
 
     -- Create the setup body with fixture initialization.
     --let setup ← createFixtureSetup fixtures.toList setup
