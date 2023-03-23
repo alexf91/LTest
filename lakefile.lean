@@ -24,3 +24,9 @@ package LTest {
 
 @[default_target]
 lean_lib LTest
+
+-- Script to build and run tests.
+script tests (args : List String) do
+  let process ← IO.Process.spawn {cmd := "tests/run", args := args.toArray}
+  let result ← process.wait
+  return result

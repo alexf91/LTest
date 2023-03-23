@@ -68,8 +68,8 @@ def main():
     logging.basicConfig(level=LEVELS[args.log_level.upper()], format=FORMAT)
 
     SCRIPTDIR.cwd()
-    sp.run(["lake", "update"])
-    sp.run(["lake", "clean"])
+    sp.run(["lake", "update"], cwd=SCRIPTDIR)
+    sp.run(["lake", "clean"], cwd=SCRIPTDIR)
 
     testdir = pathlib.PosixPath(tempfile.mkdtemp(prefix="LTest."))
     logging.info(f"Running in {testdir}")
@@ -82,7 +82,12 @@ def main():
         log = logging.getLogger(target)
 
         try:
-            sp.run(["lake", "build", target], capture_output=True, check=True)
+            sp.run(
+                ["lake", "build", target],
+                capture_output=True,
+                check=True,
+                cwd=SCRIPTDIR,
+            )
         except sp.CalledProcessError:
             log.error("lake failed")
             exitcode = 1
