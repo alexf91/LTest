@@ -25,37 +25,30 @@ open LTest
 
 
 fixture A Unit Unit where
-  default  := ()
   setup    := do trace "A.setup"
   teardown := do trace "A.teardown"
 
 fixture B Unit Unit where
-  default  := ()
   setup    := do trace "B.setup"
   teardown := do trace "B.teardown"
 
 fixture C Unit Unit requires (a : A) (b : B) where
-  default  := ()
   setup    := do trace "C.setup"
   teardown := do trace "C.teardown"
 
 fixture D Unit Unit where
-  default  := ()
   setup    := do trace "D.setup"
   teardown := do trace "D.teardown"
 
 fixture E Unit Unit where
-  default  := ()
   setup    := do trace "E.setup"
   teardown := do trace "E.teardown"
 
 fixture F Unit Unit requires (d : D) (e : E) where
-  default  := ()
   setup    := do trace "F.setup"
   teardown := do trace "F.teardown"
 
 fixture G Unit Unit requires (c : C) (f : F) where
-  default  := ()
   setup    := do trace "G.setup"
   teardown := do trace "G.teardown"
 

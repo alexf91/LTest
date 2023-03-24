@@ -190,7 +190,8 @@ def getFixtureType (stx : Syntax) : TSyntax `term :=
   Check fields for errors.
 -/
 def checkFixtureFields (stx : TSyntax `LTest.fixtureFields) : MacroM Unit := do
-  let allowed := #[`default, `setup, `teardown]
+  let allowed  := #[`default, `setup, `teardown]
+  let required := #[`setup]
   let fields := stx.raw[0].getArgs.map fun s => s[0].getId
 
   -- Check for invalid fields.
@@ -198,11 +199,11 @@ def checkFixtureFields (stx : TSyntax `LTest.fixtureFields) : MacroM Unit := do
     Macro.throwError s!"'{invalid}' is not a valid field of a fixture"
 
   -- Check for missing fields.
-  if let some missing := allowed.filter (!fields.contains ·) |>.get? 0 then
+  if let some missing := required.filter (!fields.contains ·) |>.get? 0 then
     Macro.throwError s!"field missing from fixture: '{missing}'"
 
   -- Check for duplicates.
-  let duplicates := allowed.filter fun a => (fields.filter (· == a) |>.size) != 1
+  let duplicates := allowed.filter fun a => (fields.filter (· == a) |>.size) > 1
   if let some duplicate := duplicates.get? 0 then
     Macro.throwError s!"duplicate field: '{duplicate}'"
 
@@ -291,16 +292,19 @@ macro (name := fixtureDecl)
     checkFixtureFields fields
 
     -- Find the terms for the fields we need. We already ensured that they exist.
-    let getField (name : Name) : TSyntax `term :=
-      fields.raw[0].getArgs.findSome! fun f =>
+    let getField (name : Name) (default : TSyntax `term) : TSyntax `term :=
+      let result := fields.raw[0].getArgs.findSome? fun f =>
         if f[0].getId == name then
           some $ TSyntax.mk f[1][1]
         else
           none
+      match result with
+      | some r => r
+      | none => default
 
-    let default  := getField `default
-    let setup    := getField `setup
-    let teardown := getField `teardown
+    let setup    := getField `setup default
+    let default  := getField `default  $ ← `(default)
+    let teardown := getField `teardown $ ← `(default)
 
     -- Get fixture requirements as `(Name × Name)` tuples.
     let fixtures :=  fixtures?.raw[1].getArgs.map fun arg =>

@@ -28,8 +28,6 @@ fixture NatFixture Nat Nat requires (n : AnotherFixture) where
 In the `setup` function, the state is set to `default`. It can then be changed and queried
 with the functions of the `StateM` monad.
 
-**NOTE: Dependent fixtures are currently not supported.**
-
 
 ## Testcases
 
