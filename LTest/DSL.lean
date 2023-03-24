@@ -40,9 +40,9 @@ def fixtureDependency := leading_parser
 
   This creates the runner for the testcase itself and the setup and teardown code of fixtures.
 -/
-def createTestRunner (fixtures : List (Name × Name)) (body : TSyntax `term) : MacroM (TSyntax `term) := do
-  let testBody ← createTestBody body
-  let testRunner ← createTestHarness fixtures testBody
+def mkTestRunner (fixtures : List (Name × Name)) (body : TSyntax `term) : MacroM (TSyntax `term) := do
+  let testBody ← mkTestBody
+  let testRunner ← mkTestHarness fixtures testBody
   return ← `(
     do
       let mut ($testcaseError)  : Option IO.Error := none
@@ -62,12 +62,12 @@ where
   setupErrors    := mkIdent (`setupErrors    |>.appendAfter "✝")
   teardownErrors := mkIdent (`teardownErrors |>.appendAfter "✝")
   teardownFuncs  := mkIdent (`teardown       |>.appendAfter "✝")
-  createTestHarness fixtures body := do
+  mkTestHarness fixtures body := do
     match fixtures with
     | [] =>
       return body
     | (name, fixture)::fs =>
-      let body   ← createTestHarness fs body
+      let body   ← mkTestHarness fs body
       let name  := mkIdent name
       let setup := mkIdent (fixture ++ `setup)
 
@@ -75,13 +75,13 @@ where
           match ← ($setup) with
             | .success $name teardowns =>
               $body
-              ($teardownFuncs) := teardowns ++ ($teardownFuncs)
+              ($teardownFuncs) := ($teardownFuncs) ++ teardowns
             | .error err teardowns =>
               ($setupErrors) := $setupErrors ++ [err]
-              ($teardownFuncs) := teardowns ++ ($teardownFuncs)
+              ($teardownFuncs) := ($teardownFuncs) ++ teardowns
       )
 
-  createTestBody body := do
+  mkTestBody := do
     return ← `(Term.doSeqItem|
       try
         ($body)
@@ -120,7 +120,7 @@ macro (name := testcaseDecl)
 
     -- Wrap the test body in a try/catch block and then create the surrounding fixture block,
     -- also in nested try/catch blocks.
-    let testRunner ← createTestRunner fixtures.toList body
+    let testRunner ← mkTestRunner fixtures.toList body
 
     -- Create the testcase runner.
     let runner ← `(
@@ -189,7 +189,7 @@ def getFixtureType (stx : Syntax) : TSyntax `term :=
 /--
   Check fields for errors.
 -/
-def checkFields (stx : TSyntax `LTest.fixtureFields) : MacroM Unit := do
+def checkFixtureFields (stx : TSyntax `LTest.fixtureFields) : MacroM Unit := do
   let allowed := #[`default, `setup, `teardown]
   let fields := stx.raw[0].getArgs.map fun s => s[0].getId
 
@@ -205,6 +205,70 @@ def checkFields (stx : TSyntax `LTest.fixtureFields) : MacroM Unit := do
   let duplicates := allowed.filter fun a => (fields.filter (· == a) |>.size) != 1
   if let some duplicate := duplicates.get? 0 then
     Macro.throwError s!"duplicate field: '{duplicate}'"
+
+
+/--
+  Create the setup function.
+
+  We transform `StateT σ IO α` that we get from the definition to `IO (FixtureResult σ α)`.
+  The result contains teardown functions of all dependent fixtures.
+-/
+def mkFixtureRunner (fixtures  : List (Name × Name))
+                        (default   : TSyntax `term)
+                        (setup     : TSyntax `term)
+                        (teardown  : TSyntax `term)
+                        (stateType : TSyntax `term)
+                        (valueType : TSyntax `term) : MacroM (TSyntax `term) := do
+
+  let body ← mkFixtureBody
+  let harness ← mkFixtureHarness fixtures body
+  return ← `(
+    do
+      let mut ($teardownFuncs) : List (IO Unit) := []
+      $harness
+  )
+
+where
+  teardownFuncs := mkIdent (`teardowns |>.appendAfter "✝")
+  /--
+    Call the setup code of fixture dependencies and assign them to variables.
+  -/
+  mkFixtureHarness fixtures body := do
+    match fixtures with
+    | [] =>
+      return body
+    | (name, type)::fs =>
+      let name  := mkIdent name
+      let setup := mkIdent $ type ++ `setup
+      let body   ← mkFixtureHarness fs body
+
+      return ← `(Term.doSeqItem|
+        match ← ($setup) with
+        | .success $name t =>
+          ($teardownFuncs) := ($teardownFuncs) ++ t
+          $body
+        | .error e teardowns =>
+          return .error e teardowns
+      )
+
+  /--
+    Innermost part of the fixture setup code.
+
+    This runs the setup code of the current fixture.
+  -/
+  mkFixtureBody := do
+    return ← `(Term.doSeqItem|
+      do
+        let setup    : StateT $stateType IO $valueType := ($setup)
+        let teardown : StateT $stateType IO Unit := ($teardown)
+
+        try
+          let (v, s) := ←(setup |>.run ($default))
+          let teardown := (discard <| teardown |>.run s)
+          return .success v ([teardown] ++ ($teardownFuncs))
+        catch err =>
+          return .error err ($teardownFuncs)
+    )
 
 
 macro (name := fixtureDecl)
@@ -224,7 +288,7 @@ macro (name := fixtureDecl)
       | some s => Syntax.mkStrLit s.getDocString
 
     -- Check if all fields exist.
-    checkFields fields
+    checkFixtureFields fields
 
     -- Find the terms for the fields we need. We already ensured that they exist.
     let getField (name : Name) : TSyntax `term :=
@@ -242,29 +306,9 @@ macro (name := fixtureDecl)
     let fixtures :=  fixtures?.raw[1].getArgs.map fun arg =>
       (arg[1].getId, arg[3].getId)
 
-    -- TODO: Support this.
-    if !fixtures.isEmpty then
-      Macro.throwError "fixture dependencies are not supported"
-
     let σ := getFixtureType stateType
     let α := getFixtureType valueType
-
-    -- Create the setup function. We transform `StateT σ IO α` that we get from
-    -- the definition to `IO (FixtureResult σ α)`. The result contains teardown
-    -- functions of all dependent fixtures.
-    let setup ← `(
-      do
-        let setup : StateT $σ IO $α := ($setup)
-        let teardown : StateT $σ IO Unit := ($teardown)
-
-        try
-          let (v, s) := ←(setup |>.run ($default) )
-          let teardown := (discard <| teardown |>.run s)
-
-          return .success v [teardown]
-        catch err =>
-          return .error err []
-    )
+    let setup ← mkFixtureRunner fixtures.toList default setup teardown σ α
 
     let stx ← `(
       def $name : FixtureInfo $σ $α := {

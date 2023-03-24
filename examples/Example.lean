@@ -44,5 +44,22 @@ testcase testSomething := do
   assertTrue (0 == 0)
 
 
+/--
+  Fixture with dependencies.
+-/
+fixture One Unit Nat requires (n : Zero) where
+  default := ()
+  setup := do
+    return n + 1
+  teardown := do return
+
+--#eval show IO Unit from do
+--  let r ← One.setup
+--  match r with
+--  | .success v _ => IO.println v
+--  | .error e _ => default
+
+
+
 /-! Generate the main function. -/
 #LTestMain

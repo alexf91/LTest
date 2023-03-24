@@ -30,3 +30,5 @@ lean_exe test_trace_teardown_fail
 lean_exe test_trace_test_fail
 lean_exe test_fixture_types
 lean_exe test_tempdir_fixture
+
+lean_exe test_trace_nested
