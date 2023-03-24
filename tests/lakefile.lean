@@ -31,4 +31,7 @@ lean_exe test_trace_test_fail
 lean_exe test_fixture_types
 lean_exe test_tempdir_fixture
 
-lean_exe test_trace_nested
+lean_exe test_trace_nested_linear_single
+lean_exe test_trace_nested_linear_multi
+lean_exe test_trace_nested_tree
+lean_exe test_trace_nested_forest

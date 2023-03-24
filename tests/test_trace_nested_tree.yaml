@@ -1,0 +1,17 @@
+exitcode: 0
+trace: |
+  A.setup
+  B.setup
+  C.setup
+  D.setup
+  E.setup
+  F.setup
+  G.setup
+  testcase
+  G.teardown
+  F.teardown
+  E.teardown
+  D.teardown
+  C.teardown
+  B.teardown
+  A.teardown

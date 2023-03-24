@@ -245,7 +245,7 @@ where
       return ← `(Term.doSeqItem|
         match ← ($setup) with
         | .success $name t =>
-          ($teardownFuncs) := ($teardownFuncs) ++ t
+          ($teardownFuncs) := (t ++ $teardownFuncs)
           $body
         | .error e teardowns =>
           return .error e teardowns
@@ -265,7 +265,7 @@ where
         try
           let (v, s) := ←(setup |>.run ($default))
           let teardown := (discard <| teardown |>.run s)
-          return .success v ([teardown] ++ ($teardownFuncs))
+          return .success v ([teardown] ++ $teardownFuncs)
         catch err =>
           return .error err ($teardownFuncs)
     )
