@@ -42,10 +42,16 @@ structure FixtureInfo (σ : Type) (α : Type) where
   fixture setup and teardown
 -/
 structure TestResult where
-  stdout    : String
-  stderr    : String
-  testcaseError : Option IO.Error
-  fixtureErrors : List IO.Error
+  stdout         : String
+  stderr         : String
+  testcaseError  : Option IO.Error
+  setupErrors    : List IO.Error
+  teardownErrors : List IO.Error
+
+namespace TestResult
+  def failure (r : TestResult) : Bool := !r.testcaseError.isNone
+  def error   (r : TestResult) : Bool := !r.setupErrors.isEmpty || !r.teardownErrors.isEmpty
+end TestResult
 
 
 /--
@@ -95,12 +101,26 @@ def main (names : List Name) (infos : List TestcaseInfo) (args : List String) : 
 
   for (name, info) in testcases do
     let result ← info.run
-    match (result.testcaseError, result.fixtureErrors) with
-    | (none, [])   => IO.println s!"[PASS] {name}"
-    | (some e, []) => IO.println s!"[FAIL] {name}: {e}"
-                      exitcode := 1
-    | (_, _)       => IO.println s!"[ERROR] {name}: errors in fixture"
-                      exitcode := 1
+
+    if result.error then
+      exitcode := 1
+      IO.println s!"[ERROR] {name}"
+      if !result.setupErrors.isEmpty then
+        IO.println "setup errors:"
+        for error in result.setupErrors do
+          IO.println s!"{error}"
+
+      if !result.teardownErrors.isEmpty then
+        IO.println "teardown errors:"
+        for error in result.teardownErrors do
+          IO.println s!"{error}"
+
+    else if result.failure then
+      exitcode := 1
+      IO.println s!"[FAIL] {name}: {result.testcaseError.get!}"
+
+    else
+      IO.println s!"[PASS] {name}"
 
   return exitcode
 

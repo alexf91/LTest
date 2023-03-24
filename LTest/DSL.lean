@@ -45,14 +45,23 @@ def createTestRunner (fixtures : List (Name × Name)) (body : TSyntax `term) : M
   let testRunner ← createTestHarness fixtures testBody
   return ← `(
     do
-      let mut ($testcaseError) : Option IO.Error := none
-      let mut ($fixtureErrors) : List IO.Error := []
+      let mut ($testcaseError)  : Option IO.Error := none
+      let mut ($setupErrors)    : List IO.Error   := []
+      let mut ($teardownErrors) : List IO.Error   := []
+      let mut ($teardownFuncs)  : List (IO Unit)  := []
       $testRunner
-      return ($testcaseError, $fixtureErrors)
+      for teardown in $teardownFuncs do
+        try
+          teardown
+        catch err =>
+          ($teardownErrors) := $teardownErrors ++ [err]
+      return ($testcaseError, $setupErrors, $teardownErrors)
   )
 where
-  testcaseError := mkIdent (`testcaseError |>.appendAfter "✝")
-  fixtureErrors := mkIdent (`fixtureErrors |>.appendAfter "✝")
+  testcaseError  := mkIdent (`testcaseError  |>.appendAfter "✝")
+  setupErrors    := mkIdent (`setupErrors    |>.appendAfter "✝")
+  teardownErrors := mkIdent (`teardownErrors |>.appendAfter "✝")
+  teardownFuncs  := mkIdent (`teardown       |>.appendAfter "✝")
   createTestHarness fixtures body := do
     match fixtures with
     | [] =>
@@ -70,11 +79,13 @@ where
         try
           let ($name, $state) := ← ($setup |>.run $default);
           $body
-          discard <| ($teardown |>.run $state)
+          -- Append the teardown function to a list to run at the end of the testcase.
+          -- TODO: Do this for nested teardowns too after we implement dependent fixtures.
+          ($teardownFuncs) := (discard <| ($teardown |>.run $state)) :: ($teardownFuncs)
         catch err =>
-          -- This is an error in the setup or teardown function of the current fixture.
+          -- This is an error in the setup function of the current fixture.
           -- Everything in `body` has its own try/catch block.
-          ($fixtureErrors) := $fixtureErrors ++ [err]
+          ($setupErrors) := $setupErrors ++ [err]
       )
 
   createTestBody body := do
@@ -121,14 +132,15 @@ macro (name := testcaseDecl)
     -- Create the testcase runner.
     let runner ← `(
       do
-        let (out, err, (testcaseError, fixtureErrors)) ← captureResult
+        let (out, err, (testcaseError, setupErrors, teardownErrors)) ← captureResult
           $testRunner
 
         return {
           stdout := out
           stderr := err
-          testcaseError := testcaseError
-          fixtureErrors := fixtureErrors
+          testcaseError  := testcaseError
+          setupErrors    := setupErrors
+          teardownErrors := teardownErrors
         }
     )
     -- Get the docstring as a term.
@@ -241,14 +253,8 @@ macro (name := fixtureDecl)
     if !fixtures.isEmpty then
       Macro.throwError "fixture dependencies are not supported"
 
-    -- Create the setup body with fixture initialization.
-    --let setup ← createFixtureSetup fixtures.toList setup
-
-    let stateType := getFixtureType stateType
-    let valueType := getFixtureType valueType
-
     let stx ← `(
-      def $name : FixtureInfo $stateType $valueType := {
+      def $name : FixtureInfo $(getFixtureType stateType) $(getFixtureType valueType) := {
         doc      := $doc
         default  := $default
         setup    := $setup
