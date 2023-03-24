@@ -250,7 +250,9 @@ where
         | .success $name t =>
           ($teardownFuncs) := (t ++ $teardownFuncs)
           $body
-        | e => return e
+        | .error err t =>
+          ($teardownFuncs) := (t ++ $teardownFuncs)
+          return .error err ($teardownFuncs)
       )
 
   /--
@@ -261,7 +263,7 @@ where
   mkFixtureBody := do
     return ← `(Term.doSeqItem|
       do
-        let setup    : StateT $stateType IO $valueType := ($setup)
+        let setup : StateT $stateType IO $valueType := ($setup)
 
         try
           let (v, s) := ←(setup |>.run ($default))
