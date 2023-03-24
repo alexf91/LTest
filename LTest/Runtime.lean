@@ -24,10 +24,12 @@ namespace LTest
 
 /--
   Result of the transformed `setup` functions for fixtures.
+
+  This can only report errors for setup function, so this is what `e` refers to.
 -/
 inductive FixtureResult (σ : Type) (α : Type) where
-  | success (v : α)        (teardowns : List (IO Unit))
-  | error   (e : IO.Error) (teardowns : List (IO Unit))
+  | success (v : α)               (teardowns : List (Name × IO Unit))
+  | error   (e : Name × IO.Error) (teardowns : List (Name × IO Unit))
 
 
 /--
@@ -37,8 +39,9 @@ inductive FixtureResult (σ : Type) (α : Type) where
   to a testcase or another fixture that depends on the fixture.
 -/
 structure FixtureInfo (σ : Type) (α : Type) where
-  doc      : Option String := none
-  setup    : IO (FixtureResult σ α)
+  name  : Name
+  doc   : Option String := none
+  setup : IO (FixtureResult σ α)
 
 
 /--
@@ -51,12 +54,12 @@ structure TestResult where
   stdout         : String
   stderr         : String
   testcaseError  : Option IO.Error
-  setupErrors    : List IO.Error
-  teardownErrors : List IO.Error
+  setupError     : Option (Name × IO.Error)
+  teardownErrors : List (Name × IO.Error)
 
 namespace TestResult
   def failure (r : TestResult) : Bool := !r.testcaseError.isNone
-  def error   (r : TestResult) : Bool := !r.setupErrors.isEmpty || !r.teardownErrors.isEmpty
+  def error   (r : TestResult) : Bool := !r.setupError.isNone || !r.teardownErrors.isEmpty
 end TestResult
 
 
@@ -111,15 +114,14 @@ def main (names : List Name) (infos : List TestcaseInfo) (args : List String) : 
     if result.error then
       exitcode := 1
       IO.println s!"[ERROR] {name}"
-      if !result.setupErrors.isEmpty then
-        IO.println "setup errors:"
-        for error in result.setupErrors do
-          IO.println s!"{error}"
+      if let some (name, error) := result.setupError then
+        IO.println "setup error:"
+        IO.println s!"{name}: {error}"
 
       if !result.teardownErrors.isEmpty then
         IO.println "teardown errors:"
-        for error in result.teardownErrors do
-          IO.println s!"{error}"
+        for (name, error) in result.teardownErrors do
+          IO.println s!"{name}: {error}"
 
     else if result.failure then
       exitcode := 1
