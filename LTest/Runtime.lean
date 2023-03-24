@@ -23,6 +23,14 @@ namespace LTest
 
 
 /--
+  Result of the transformed `setup` functions for fixtures.
+-/
+inductive FixtureResult (σ : Type) (α : Type) where
+  | success (v : α)        (teardowns : List (IO Unit))
+  | error   (e : IO.Error) (teardowns : List (IO Unit))
+
+
+/--
   Fixture with a state of type `σ` and a value of type `α`.
 
   The state is updated by the `setup` and `teardown` functions, the value is passed
@@ -30,9 +38,7 @@ namespace LTest
 -/
 structure FixtureInfo (σ : Type) (α : Type) where
   doc      : Option String := none
-  default  : σ
-  setup    : StateT σ IO α
-  teardown : StateT σ IO Unit
+  setup    : IO (FixtureResult σ α)
 
 
 /--

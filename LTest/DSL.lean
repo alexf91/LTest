@@ -67,25 +67,18 @@ where
     | [] =>
       return body
     | (name, fixture)::fs =>
-      let body ← createTestHarness fs body
-
-      let state    := mkIdent (name.appendAfter "'✝")
-      let name     := mkIdent name
-      let setup    := mkIdent (fixture ++ `setup)
-      let teardown := mkIdent (fixture ++ `teardown)
-      let default  := mkIdent (fixture ++ `default)
+      let body   ← createTestHarness fs body
+      let name  := mkIdent name
+      let setup := mkIdent (fixture ++ `setup)
 
       return ← `(Term.doSeqItem|
-        try
-          let ($name, $state) := ← ($setup |>.run $default);
-          $body
-          -- Append the teardown function to a list to run at the end of the testcase.
-          -- TODO: Do this for nested teardowns too after we implement dependent fixtures.
-          ($teardownFuncs) := (discard <| ($teardown |>.run $state)) :: ($teardownFuncs)
-        catch err =>
-          -- This is an error in the setup function of the current fixture.
-          -- Everything in `body` has its own try/catch block.
-          ($setupErrors) := $setupErrors ++ [err]
+          match ← ($setup) with
+            | .success $name teardowns =>
+              $body
+              ($teardownFuncs) := teardowns ++ ($teardownFuncs)
+            | .error err teardowns =>
+              ($setupErrors) := $setupErrors ++ [err]
+              ($teardownFuncs) := teardowns ++ ($teardownFuncs)
       )
 
   createTestBody body := do
@@ -253,12 +246,30 @@ macro (name := fixtureDecl)
     if !fixtures.isEmpty then
       Macro.throwError "fixture dependencies are not supported"
 
+    let σ := getFixtureType stateType
+    let α := getFixtureType valueType
+
+    -- Create the setup function. We transform `StateT σ IO α` that we get from
+    -- the definition to `IO (FixtureResult σ α)`. The result contains teardown
+    -- functions of all dependent fixtures.
+    let setup ← `(
+      do
+        let setup : StateT $σ IO $α := ($setup)
+        let teardown : StateT $σ IO Unit := ($teardown)
+
+        try
+          let (v, s) := ←(setup |>.run ($default) )
+          let teardown := (discard <| teardown |>.run s)
+
+          return .success v [teardown]
+        catch err =>
+          return .error err []
+    )
+
     let stx ← `(
-      def $name : FixtureInfo $(getFixtureType stateType) $(getFixtureType valueType) := {
-        doc      := $doc
-        default  := $default
-        setup    := $setup
-        teardown := $teardown
+      def $name : FixtureInfo $σ $α := {
+        doc   := $doc
+        setup := $setup
       }
     )
     return TSyntax.mk stx
