@@ -46,12 +46,13 @@ testcase testSomething := do
 
 /--
   Fixture with dependencies.
+
+  If we omit `teardown`, then it's set to `do return` by default.
+  The `default` state can be omitted if `Inhabited σ` can be synthesized.
 -/
 fixture One Unit Nat requires (n : Zero) where
-  default := ()
   setup := do
     return n + 1
-  teardown := do return
 
 
 /-! Generate the main function. -/

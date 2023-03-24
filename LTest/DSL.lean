@@ -215,15 +215,16 @@ def checkFixtureFields (stx : TSyntax `LTest.fixtureFields) : MacroM Unit := do
   The result contains teardown functions of all dependent fixtures.
 -/
 def mkFixtureRunner (fixtures  : List (Name × Name))
-                        (default   : TSyntax `term)
-                        (setup     : TSyntax `term)
-                        (teardown  : TSyntax `term)
-                        (stateType : TSyntax `term)
-                        (valueType : TSyntax `term) : MacroM (TSyntax `term) := do
+                    (default   : TSyntax `term)
+                    (setup     : TSyntax `term)
+                    (teardown  : TSyntax `term)
+                    (stateType : TSyntax `term)
+                    (valueType : TSyntax `term) : MacroM (TSyntax `term) := do
 
   let body ← mkFixtureBody
   let harness ← mkFixtureHarness fixtures body
   return ← `(
+    let ($teardownName) : StateT $stateType IO Unit := ($teardown)
     do
       let mut ($teardownFuncs) : List (IO Unit) := []
       $harness
@@ -231,6 +232,7 @@ def mkFixtureRunner (fixtures  : List (Name × Name))
 
 where
   teardownFuncs := mkIdent (`teardowns |>.appendAfter "✝")
+  teardownName  := mkIdent (`teardown |>.appendAfter "✝")
   /--
     Call the setup code of fixture dependencies and assign them to variables.
   -/
@@ -248,8 +250,7 @@ where
         | .success $name t =>
           ($teardownFuncs) := (t ++ $teardownFuncs)
           $body
-        | .error e teardowns =>
-          return .error e teardowns
+        | e => return e
       )
 
   /--
@@ -261,12 +262,10 @@ where
     return ← `(Term.doSeqItem|
       do
         let setup    : StateT $stateType IO $valueType := ($setup)
-        let teardown : StateT $stateType IO Unit := ($teardown)
 
         try
           let (v, s) := ←(setup |>.run ($default))
-          let teardown := (discard <| teardown |>.run s)
-          return .success v ([teardown] ++ $teardownFuncs)
+          return .success v ((discard <| $teardownName |>.run s) :: $teardownFuncs)
         catch err =>
           return .error err ($teardownFuncs)
     )
