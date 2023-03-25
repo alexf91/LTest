@@ -22,5 +22,9 @@ package LTest {
   precompileModules := true
 }
 
+require Cli from git
+  "https://github.com/mhuisi/lean4-cli" @ "nightly"
+
+
 @[default_target]
 lean_lib LTest

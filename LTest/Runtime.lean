@@ -15,21 +15,21 @@
 --
 
 import Lean
+import Cli
 open Lean
 
 set_option relaxedAutoImplicit false
 
 namespace LTest
 
-
 /--
   Result of the transformed `setup` functions for fixtures.
 
-  This can only report errors for setup function, so this is what `e` refers to.
+  This can only report errors for setup function, so this is what `error` refers to.
 -/
-inductive FixtureResult (σ : Type) (α : Type) where
-  | success (v : α)               (teardowns : List (Name × IO Unit))
-  | error   (e : Name × IO.Error) (teardowns : List (Name × IO Unit))
+inductive FixtureResult (α : Type) where
+  | success (value : α) (teardowns : List (Name × IO Unit))
+  | error (type : Name) (var : Name) (error : IO.Error) (teardowns : List (Name × IO Unit))
 
 
 /--
@@ -41,7 +41,7 @@ inductive FixtureResult (σ : Type) (α : Type) where
 structure FixtureInfo (σ : Type) (α : Type) where
   name  : Name
   doc   : Option String := none
-  setup : IO (FixtureResult σ α)
+  setup : IO (FixtureResult α)
 
 
 /--

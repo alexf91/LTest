@@ -76,8 +76,8 @@ where
             | .success $name teardowns =>
               $body
               ($teardownFuncs) := ($teardownFuncs) ++ teardowns
-            | .error err teardowns =>
-              ($setupError) := err
+            | .error tn vn e teardowns =>
+              ($setupError) := (tn, e)
               ($teardownFuncs) := ($teardownFuncs) ++ teardowns
       )
 
@@ -251,8 +251,8 @@ where
         | .success $name td =>
           ($teardownFuncs) := (td ++ $teardownFuncs)
           $body
-        | .error err td =>
-          return .error err (td ++ $teardownFuncs)
+        | .error tn vn e td =>
+          return .error tn vn e (td ++ $teardownFuncs)
       )
 
   /--
@@ -271,7 +271,7 @@ where
           let (v, s) := ← (setup |>.run ($default))
           return .success v (($name, (discard <| $teardownFunc |>.run s)) :: $teardownFuncs)
         catch err =>
-          return .error ($name, err) ($teardownFuncs)
+          return .error $name `TODO err ($teardownFuncs)
     )
 
 
