@@ -24,10 +24,8 @@ namespace LTest
 
 /--
   Result of the transformed `setup` functions for fixtures.
-
-  This can only report errors for setup function, so this is what `error` refers to.
 -/
-inductive FixtureResult (α : Type) where
+inductive SetupResult (α : Type) where
   | success (value : α) (teardowns : List (Name × IO Unit))
   | error (type : Name) (var : Name) (error : IO.Error) (teardowns : List (Name × IO Unit))
 
@@ -41,7 +39,7 @@ inductive FixtureResult (α : Type) where
 structure FixtureInfo (σ : Type) (α : Type) where
   name  : Name
   doc   : Option String := none
-  setup : IO (FixtureResult α)
+  setup : IO (SetupResult α)
 
 
 /--
@@ -51,8 +49,8 @@ structure FixtureInfo (σ : Type) (α : Type) where
   fixture setup and teardown
 -/
 structure TestResult where
-  stdout         : String
-  stderr         : String
+  stdout         : ByteArray
+  stderr         : ByteArray
   testcaseError  : Option IO.Error
   setupError     : Option (Name × IO.Error)
   teardownErrors : List (Name × IO.Error)
@@ -74,26 +72,33 @@ structure TestcaseInfo where
   run  : IO TestResult
 
 /--
+  Captured result.
+-/
+inductive CaptureResult (α : Type) where
+  | success (value : α)        (stdout : ByteArray) (stderr : ByteArray)
+  | error   (error : IO.Error) (stdout : ByteArray) (stderr : ByteArray)
+
+
+/--
   Capture stdout, stderr and exceptions.
 
   This is taken from withIsolatedStreams in Lean/System/IO.lean and
   modified to split stdout and stderr.
+
+  We also catch exceptions here to get the output if the function fails.
 -/
-def captureResult {α : Type} (x : IO α) : IO (String × String × α) := do
+def captureResult {α : Type} (f : IO α) : IO (CaptureResult α) := do
     let bIn  ← IO.mkRef { : IO.FS.Stream.Buffer }
     let bOut ← IO.mkRef { : IO.FS.Stream.Buffer }
     let bErr ← IO.mkRef { : IO.FS.Stream.Buffer }
 
-    let r := (← IO.withStdin  (IO.FS.Stream.ofBuffer bIn)  <|
-            IO.withStdout (IO.FS.Stream.ofBuffer bOut) <|
-            IO.withStderr (IO.FS.Stream.ofBuffer bErr) x)
-
-    let bOut ← liftM (m := BaseIO) bOut.get
-    let bErr ← liftM (m := BaseIO) bErr.get
-    let out := String.fromUTF8Unchecked bOut.data
-    let err := String.fromUTF8Unchecked bErr.data
-
-    return (out, err, r)
+    try
+      let r := (← IO.withStdin  (IO.FS.Stream.ofBuffer bIn)  <|
+                  IO.withStdout (IO.FS.Stream.ofBuffer bOut) <|
+                  IO.withStderr (IO.FS.Stream.ofBuffer bErr) f)
+      return .success r (← bOut.get).data (← bErr.get).data
+    catch err =>
+      return .error err (← bOut.get).data (← bErr.get).data
 
 
 /--

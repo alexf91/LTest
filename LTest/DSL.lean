@@ -125,16 +125,18 @@ macro (name := testcaseDecl)
     -- Create the testcase runner.
     let runner ← `(
       do
-        let (out, err, (testcaseError, setupError, teardownErrors)) ← captureResult
-          $testRunner
-
-        return {
-          stdout := out
-          stderr := err
-          testcaseError  := testcaseError
-          setupError     := setupError
-          teardownErrors := teardownErrors
-        }
+        -- This always succeeds, so we can ignore the error case.
+        match (← captureResult $testRunner) with
+        | .success (testcaseError, setupError, teardownErrors) out err =>
+          return {
+            stdout := out
+            stderr := err
+            testcaseError  := testcaseError
+            setupError     := setupError
+            teardownErrors := teardownErrors
+          }
+        | _ =>
+          panic! "unexpected error in testcase runner"
     )
     -- Get the docstring as a term.
     let doc := match doc? with
@@ -211,7 +213,7 @@ def checkFixtureFields (stx : TSyntax `LTest.fixtureFields) : MacroM Unit := do
 /--
   Create the setup function.
 
-  We transform `StateT σ IO α` that we get from the definition to `IO (FixtureResult σ α)`.
+  We transform `StateT σ IO α` that we get from the definition to `IO (SetupResult α)`.
   The result contains teardown functions of all dependent fixtures.
 -/
 def mkFixtureRunner (fixtures  : List (Name × Name))
