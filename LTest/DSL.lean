@@ -69,20 +69,21 @@ where
       let name  := mkIdent varName
       let setup := mkIdent (typeName ++ `setup)
 
-      return ← `(Term.doSeqItem|
-          -- TODO: Capture output
-          match ← ($setup) with
-            | .success $name teardowns =>
-              $body
-              ($teardownFuncs) := ($teardownFuncs) ++ teardowns
-            | .error e teardowns =>
-              ($setupResults) := (.error e .empty .empty) :: $setupResults
-              ($teardownFuncs) := ($teardownFuncs) ++ teardowns
+      return ← `(Term.doSeqItem| do
+          let r : SetupResult _ ← ($setup)
+          match r with
+            | .success $name _ cs =>
+              $body:doSeqItem
+              ($setupResults) := cs ++ $setupResults
+            | .error e _ cs =>
+              ($setupResults) := cs ++ $setupResults
+
+          ($teardownFuncs) := ($teardownFuncs) ++ r.teardowns
       )
 
   mkTestBody := do
     return ← `(Term.doSeqItem|
-      ($testcaseResult) := ← captureResult ($body)
+      ($testcaseResult) ← captureResult ($body)
     )
 
 /--
@@ -121,17 +122,14 @@ macro (name := testcaseDecl)
     let runner ← `(
       do
         -- This always succeeds, so we can ignore the error case.
-        match (← captureResult $testRunner) with
-        | .success (testcaseResult, setupResults, teardownResults) out err =>
-          return {
-            stdout := out
-            stderr := err
-            testcaseResult  := testcaseResult
-            setupResults    := setupResults
-            teardownResults := teardownResults
-          }
-        | _ =>
-          panic! "unexpected error in testcase runner"
+        -- We don't capture the result here, because it is all captured during fixture
+        -- functions and testcase execution.
+        let (testcaseResult, setupResults, teardownResults) ← ($testRunner)
+        return {
+          testcaseResult  := testcaseResult
+          setupResults    := setupResults
+          teardownResults := teardownResults
+        }
     )
     -- Get the docstring as a term.
     let doc := match doc? with
@@ -224,12 +222,14 @@ def mkFixtureRunner (fixtures  : List (Name × Name))
     let ($teardownFunc) : StateT $stateType IO Unit := ($teardown)
     do
       let mut ($teardownFuncs) : List (IO Unit) := []
+      let mut ($setupResults)  : List (CaptureResult Unit) := []
       $harness
   )
 
 where
+  setupResults  := mkIdent (`srs |>.appendAfter "✝")
   teardownFuncs := mkIdent (`tds |>.appendAfter "✝")
-  teardownFunc  := mkIdent (`td |>.appendAfter "✝")
+  teardownFunc  := mkIdent (`td  |>.appendAfter "✝")
   /--
     Call the setup code of fixture dependencies and assign them to variables.
   -/
@@ -242,32 +242,37 @@ where
       let setup := mkIdent $ type ++ `setup
       let body   ← mkFixtureHarness fs body
 
-      return ← `(Term.doSeqItem|
-        match ← ($setup) with
-        | .success $name td =>
+      return ← `(Term.doSeqItem| do
+        let r : SetupResult _ ← ($setup)
+        ($setupResults) := $setupResults ++ r.captures
+        match r with
+        | .success $name td cs =>
           ($teardownFuncs) := (td ++ $teardownFuncs)
           $body
-        | .error e td =>
-          return .error e (td ++ $teardownFuncs)
+        | .error e td cs =>
+          return .error e (td ++ $teardownFuncs) ($setupResults)
       )
 
   /--
     Innermost part of the fixture setup code.
 
-    This runs the setup code of the current fixture.
+    This runs the setup code of the current fixture and then returns.
+    `$setupResults` is populated in the nested test harness and then finally returned
+    in this body.
   -/
   mkFixtureBody := do
     return ← `(Term.doSeqItem|
       do
         -- TODO: Limit which variables are visible in the setup function.
         --       Currently it shows multiple inaccessible `teardowns` lists and more.
-        let setup : StateT $stateType IO $valueType := ($setup)
-
-        try
-          let (v, s) := ← (setup |>.run ($default))
-          return .success v ((discard <| $teardownFunc |>.run s) :: $teardownFuncs)
-        catch err =>
-          return .error err ($teardownFuncs)
+        let setup : StateT $stateType IO $valueType := $setup
+        let r ← captureResult (setup |>.run $default)
+        match r with
+        | .success (v, s) _ cs =>
+          let td := (discard <| $teardownFunc |>.run s)
+          return .success v (td :: $teardownFuncs) ($setupResults ++ [r.withoutValue])
+        | .error err _ cs =>
+          return .error err $teardownFuncs ($setupResults ++ [r.withoutValue])
     )
 
 

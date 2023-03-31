@@ -55,5 +55,9 @@ fixture One Unit Nat requires (n : Zero) where
     return n + 1
 
 
+testcase testOne requires (n : One) := do
+  assertTrue (n == 1)
+
+
 /-! Generate the main function. -/
 #LTestMain

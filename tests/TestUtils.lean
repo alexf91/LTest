@@ -19,7 +19,7 @@ namespace TestUtils
 /--
   Write a string to the file `trace` in the current working directory.
 -/
-def trace (msg : String) : IO Unit :=
+def trace (msg : String) : IO Unit := do
   IO.FS.withFile "trace" IO.FS.Mode.append $ fun fp => do
     fp.putStrLn msg
 

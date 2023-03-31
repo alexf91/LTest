@@ -36,6 +36,10 @@ namespace CaptureResult
     | .error e _ _ => e
     | _ => panic! "result does not contain error"
 
+  def value! [Inhabited α] (r : CaptureResult α) := match r with
+    | .success v _ _ => v
+    | _ => panic! "result does not contain value"
+
   def isError (r : CaptureResult α) := match r with
     | .error _ _ _ => true
     | _ => false
@@ -43,6 +47,19 @@ namespace CaptureResult
   def isSuccess (r : CaptureResult α) := match r with
     | .success _ _ _ => true
     | _ => false
+
+  /-- Return the same object, but replace the value with `()`. -/
+  def withoutValue (r : CaptureResult α) : CaptureResult Unit := match r with
+    | .success _ out err => .success () out err
+    | .error e out err   => .error e out err
+
+  def stdout (r : CaptureResult α) := match r with
+    | .success _ out _ => out
+    | .error   _ out _ => out
+
+  def stderr (r : CaptureResult α) := match r with
+    | .success _ _ err => err
+    | .error   _ _ err => err
 
 end CaptureResult
 
@@ -74,11 +91,23 @@ def captureResult {α : Type} (f : IO α) : IO (CaptureResult α) := do
 inductive SetupResult (α : Type) where
   | success (value     : α)
             (teardowns : List (IO Unit))
-            --(captures  : List (Name × CaptureResult Unit))
+            (captures  : List (CaptureResult Unit))
   | error (error     : IO.Error)
           (teardowns : List (IO Unit))
-          --(captures  : List (Name × CaptureResult Unit))
+          (captures  : List (CaptureResult Unit))
+  deriving Inhabited
 
+namespace SetupResult
+
+  def teardowns (r : SetupResult α) := match r with
+    | .success _ tds _ => tds
+    | .error   _ tds _ => tds
+
+  def captures (r : SetupResult α) := match r with
+    | .success _ _ cs => cs
+    | .error   _ _ cs => cs
+
+end SetupResult
 
 /--
   Fixture with a state of type `σ` and a value of type `α`.
@@ -99,8 +128,6 @@ structure FixtureInfo (σ : Type) (α : Type) where
   fixture setup and teardown
 -/
 structure TestResult where
-  stdout          : ByteArray
-  stderr          : ByteArray
   testcaseResult  : CaptureResult Unit
   setupResults    : List (CaptureResult Unit)
   teardownResults : List (CaptureResult Unit)
