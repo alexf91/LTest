@@ -90,11 +90,11 @@ def captureResult {α : Type} (f : IO α) : IO (CaptureResult α) := do
 -/
 inductive SetupResult (α : Type) where
   | success (value     : α)
-            (teardowns : List (IO Unit))
-            (captures  : List (CaptureResult Unit))
+            (teardowns : List (Name × IO Unit))
+            (captures  : List (Name × CaptureResult Unit))
   | error (error     : IO.Error)
-          (teardowns : List (IO Unit))
-          (captures  : List (CaptureResult Unit))
+          (teardowns : List (Name × IO Unit))
+          (captures  : List (Name × CaptureResult Unit))
   deriving Inhabited
 
 namespace SetupResult
@@ -129,8 +129,8 @@ structure FixtureInfo (σ : Type) (α : Type) where
 -/
 structure TestResult where
   testcaseResult  : CaptureResult Unit
-  setupResults    : List (CaptureResult Unit)
-  teardownResults : List (CaptureResult Unit)
+  setupResults    : List (Name × CaptureResult Unit)
+  teardownResults : List (Name × CaptureResult Unit)
 
 namespace TestResult
   def isFailure (r : TestResult) : Bool := match r.testcaseResult with
@@ -138,10 +138,10 @@ namespace TestResult
     | _            => false
 
   def isError (r : TestResult) : Bool :=
-    r.setupResults.any (fun r => r.isError) || r.teardownResults.any (fun r => r.isError)
+    r.setupResults.any (fun r => r.2.isError) || r.teardownResults.any (fun r => r.2.isError)
 
-  def setupErrors    (r : TestResult) := r.setupResults.filter    fun r => r.isError
-  def teardownErrors (r : TestResult) := r.teardownResults.filter fun r => r.isError
+  def setupErrors    (r : TestResult) := r.setupResults.filter    fun r => r.2.isError
+  def teardownErrors (r : TestResult) := r.teardownResults.filter fun r => r.2.isError
 end TestResult
 
 
@@ -177,13 +177,13 @@ def main (names : List Name) (infos : List TestcaseInfo) (args : List String) : 
 
       if !result.setupErrors.isEmpty then
         IO.println "setup error:"
-        for error in result.setupErrors do
-          IO.println s!"{error.error!}"
+        for (name, error) in result.setupErrors do
+          IO.println s!"{name}: {error.error!}"
 
       if !result.teardownErrors.isEmpty then
         IO.println "teardown errors:"
-        for error in result.teardownErrors do
-          IO.println s!"{error.error!}"
+        for (name, error) in result.teardownErrors do
+          IO.println s!"{name}: {error.error!}"
 
     else if result.isFailure then
       exitcode := 1

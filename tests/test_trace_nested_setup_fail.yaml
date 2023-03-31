@@ -21,3 +21,7 @@ trace: |
   C1.teardown
   B1.teardown
   A1.teardown
+stdout: |
+  [ERROR] Foo
+  setup error:
+  D2: D2.error

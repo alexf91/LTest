@@ -36,7 +36,7 @@ fixture B Unit Unit where
   setup    := do trace "B.setup"
   teardown := do
     trace "B.teardown"
-    throw $ IO.userError "B.failure"
+    throw $ IO.userError "B.error"
 
 fixture C Unit Unit where
   default  := ()

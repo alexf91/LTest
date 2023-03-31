@@ -40,19 +40,20 @@ def fixtureDependency := leading_parser
 
   This creates the runner for the testcase itself and the setup and teardown code of fixtures.
 -/
-def mkTestRunner (fixtures : List (Name × Name)) (body : TSyntax `term) : MacroM (TSyntax `term) := do
+private def mkTestRunner (fixtures : List (Name × Name))
+                         (body : TSyntax `term) : MacroM (TSyntax `term) := do
   let testBody ← mkTestBody
   let testRunner ← mkTestHarness fixtures testBody
   return ← `(
     do
-      let mut ($testcaseResult)  : CaptureResult Unit        := default
-      let mut ($setupResults)    : List (CaptureResult Unit) := []
-      let mut ($teardownResults) : List (CaptureResult Unit) := []
-      let mut ($teardownFuncs)   : List (IO Unit)            := []
+      let mut ($testcaseResult)  : CaptureResult Unit               := default
+      let mut ($setupResults)    : List (Name × CaptureResult Unit) := []
+      let mut ($teardownResults) : List (Name × CaptureResult Unit) := []
+      let mut ($teardownFuncs)   : List (Name × IO Unit)            := []
       $testRunner
-      for td in $teardownFuncs do
+      for (name, td) in $teardownFuncs do
         let r ← captureResult td
-        ($teardownResults) := $teardownResults ++ [r]
+        ($teardownResults) := $teardownResults ++ [(name, r)]
       return ($testcaseResult, $setupResults, $teardownResults)
   )
 where
@@ -175,7 +176,7 @@ def fixtureFields := leading_parser
 def fixtureType := leading_parser
   ("(" >> termParser >> ")") <|> (ident)
 
-def getFixtureType (stx : Syntax) : TSyntax `term :=
+private def getFixtureType (stx : Syntax) : TSyntax `term :=
   match stx.getNumArgs with
   | 1 => TSyntax.mk $ stx.getArg 0
   | 3 => TSyntax.mk $ stx.getArg 1
@@ -184,7 +185,7 @@ def getFixtureType (stx : Syntax) : TSyntax `term :=
 /--
   Check fields for errors.
 -/
-def checkFixtureFields (stx : TSyntax `LTest.fixtureFields) : MacroM Unit := do
+private def checkFixtureFields (stx : TSyntax `LTest.fixtureFields) : MacroM Unit := do
   let allowed  := #[`default, `setup, `teardown]
   let required := #[`setup]
   let fields := stx.raw[0].getArgs.map fun s => s[0].getId
@@ -209,20 +210,21 @@ def checkFixtureFields (stx : TSyntax `LTest.fixtureFields) : MacroM Unit := do
   We transform `StateT σ IO α` that we get from the definition to `IO (SetupResult α)`.
   The result contains teardown functions of all dependent fixtures.
 -/
-def mkFixtureRunner (fixtures  : List (Name × Name))
-                    (default   : TSyntax `term)
-                    (setup     : TSyntax `term)
-                    (teardown  : TSyntax `term)
-                    (stateType : TSyntax `term)
-                    (valueType : TSyntax `term) : MacroM (TSyntax `term) := do
+private def mkFixtureRunner (fixtures  : List (Name × Name))
+                            (typeName  : TSyntax `term)
+                            (default   : TSyntax `term)
+                            (setup     : TSyntax `term)
+                            (teardown  : TSyntax `term)
+                            (stateType : TSyntax `term)
+                            (valueType : TSyntax `term) : MacroM (TSyntax `term) := do
 
   let body ← mkFixtureBody
   let harness ← mkFixtureHarness fixtures body
   return ← `(
     let ($teardownFunc) : StateT $stateType IO Unit := ($teardown)
     do
-      let mut ($teardownFuncs) : List (IO Unit) := []
-      let mut ($setupResults)  : List (CaptureResult Unit) := []
+      let mut ($teardownFuncs) : List (Name × IO Unit)            := []
+      let mut ($setupResults)  : List (Name × CaptureResult Unit) := []
       $harness
   )
 
@@ -246,11 +248,11 @@ where
         let r : SetupResult _ ← ($setup)
         ($setupResults) := $setupResults ++ r.captures
         match r with
-        | .success $name td cs =>
-          ($teardownFuncs) := (td ++ $teardownFuncs)
+        | .success $name tds cs =>
+          ($teardownFuncs) := (tds ++ $teardownFuncs)
           $body
-        | .error e td cs =>
-          return .error e (td ++ $teardownFuncs) ($setupResults)
+        | .error e tds cs =>
+          return .error e (tds ++ $teardownFuncs) ($setupResults)
       )
 
   /--
@@ -270,9 +272,9 @@ where
         match r with
         | .success (v, s) _ cs =>
           let td := (discard <| $teardownFunc |>.run s)
-          return .success v (td :: $teardownFuncs) ($setupResults ++ [r.withoutValue])
+          return .success v (($typeName, td) :: $teardownFuncs) ($setupResults ++ [($typeName, r.withoutValue)])
         | .error err _ cs =>
-          return .error err $teardownFuncs ($setupResults ++ [r.withoutValue])
+          return .error err $teardownFuncs ($setupResults ++ [($typeName, r.withoutValue)])
     )
 
 
@@ -293,7 +295,7 @@ macro (name := fixtureDecl)
       | some s => Syntax.mkStrLit s.getDocString
 
     -- Get the name as a term.
-    let nameStr : TSyntax `term := Syntax.mkStrLit name.getId.toString
+    let nameStr : TSyntax `term ← `(Name.mkSimple $(Syntax.mkStrLit name.getId.toString))
 
     -- Check if all fields exist.
     checkFixtureFields fields
@@ -319,7 +321,7 @@ macro (name := fixtureDecl)
 
     let σ := getFixtureType stateType
     let α := getFixtureType valueType
-    let setup ← mkFixtureRunner fixtures.toList default setup teardown σ α
+    let setup ← mkFixtureRunner fixtures.toList nameStr default setup teardown σ α
 
     let stx ← `(
       def $name : FixtureInfo $σ $α := {

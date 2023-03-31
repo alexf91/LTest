@@ -7,3 +7,7 @@ trace: |
   C.teardown
   B.teardown
   A.teardown
+stdout: |
+  [ERROR] Foo
+  teardown errors:
+  B: B.error

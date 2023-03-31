@@ -41,6 +41,6 @@ fixture C Unit Unit where
 
 testcase Foo requires (a : A) (b : B) (c : C) := do
   trace "testcase"
-  throw $ IO.userError "Foo.failure"
+  throw $ IO.userError "Foo.error"
 
 #LTestMain

@@ -3,3 +3,7 @@ trace: |
   A.setup
   B.setup
   A.teardown
+stdout: |
+  [ERROR] Foo
+  setup error:
+  B: B.error
