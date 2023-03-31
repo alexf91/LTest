@@ -45,23 +45,21 @@ def mkTestRunner (fixtures : List (Name × Name)) (body : TSyntax `term) : Macro
   let testRunner ← mkTestHarness fixtures testBody
   return ← `(
     do
-      let mut ($testcaseResult) : CaptureResult Unit       := default
-      let mut ($setupError)     : Option (Name × IO.Error) := none
-      let mut ($teardownErrors) : List (Name × IO.Error)   := []
-      let mut ($teardownFuncs)  : List (Name × IO Unit)    := []
+      let mut ($testcaseResult)  : CaptureResult Unit        := default
+      let mut ($setupResults)    : List (CaptureResult Unit) := []
+      let mut ($teardownResults) : List (CaptureResult Unit) := []
+      let mut ($teardownFuncs)   : List (IO Unit)            := []
       $testRunner
-      for (name, teardown) in $teardownFuncs do
-        try
-          teardown
-        catch err =>
-          ($teardownErrors) := $teardownErrors ++ [(name, err)]
-      return ($testcaseResult, $setupError, $teardownErrors)
+      for td in $teardownFuncs do
+        let r ← captureResult td
+        ($teardownResults) := $teardownResults ++ [r]
+      return ($testcaseResult, $setupResults, $teardownResults)
   )
 where
-  testcaseResult := mkIdent (`testcaseResult |>.appendAfter "✝")
-  setupError     := mkIdent (`setupError     |>.appendAfter "✝")
-  teardownErrors := mkIdent (`teardownErrors |>.appendAfter "✝")
-  teardownFuncs  := mkIdent (`teardown       |>.appendAfter "✝")
+  testcaseResult  := mkIdent (`testcaseResult  |>.appendAfter "✝")
+  setupResults    := mkIdent (`setupResults    |>.appendAfter "✝")
+  teardownResults := mkIdent (`teardownResults |>.appendAfter "✝")
+  teardownFuncs   := mkIdent (`teardown        |>.appendAfter "✝")
   mkTestHarness fixtures body := do
     match fixtures with
     | [] =>
@@ -72,12 +70,13 @@ where
       let setup := mkIdent (typeName ++ `setup)
 
       return ← `(Term.doSeqItem|
+          -- TODO: Capture output
           match ← ($setup) with
             | .success $name teardowns =>
               $body
               ($teardownFuncs) := ($teardownFuncs) ++ teardowns
-            | .error tn vn e teardowns =>
-              ($setupError) := (tn, e)
+            | .error e teardowns =>
+              ($setupResults) := (.error e .empty .empty) :: $setupResults
               ($teardownFuncs) := ($teardownFuncs) ++ teardowns
       )
 
@@ -85,7 +84,6 @@ where
     return ← `(Term.doSeqItem|
       ($testcaseResult) := ← captureResult ($body)
     )
-
 
 /--
   Declare a testcase.
@@ -124,13 +122,13 @@ macro (name := testcaseDecl)
       do
         -- This always succeeds, so we can ignore the error case.
         match (← captureResult $testRunner) with
-        | .success (testcaseResult, setupError, teardownErrors) out err =>
+        | .success (testcaseResult, setupResults, teardownResults) out err =>
           return {
             stdout := out
             stderr := err
-            testcaseResult := testcaseResult
-            setupError     := setupError
-            teardownErrors := teardownErrors
+            testcaseResult  := testcaseResult
+            setupResults    := setupResults
+            teardownResults := teardownResults
           }
         | _ =>
           panic! "unexpected error in testcase runner"
@@ -214,7 +212,6 @@ def checkFixtureFields (stx : TSyntax `LTest.fixtureFields) : MacroM Unit := do
   The result contains teardown functions of all dependent fixtures.
 -/
 def mkFixtureRunner (fixtures  : List (Name × Name))
-                    (name      : TSyntax `term)
                     (default   : TSyntax `term)
                     (setup     : TSyntax `term)
                     (teardown  : TSyntax `term)
@@ -226,7 +223,7 @@ def mkFixtureRunner (fixtures  : List (Name × Name))
   return ← `(
     let ($teardownFunc) : StateT $stateType IO Unit := ($teardown)
     do
-      let mut ($teardownFuncs) : List (Name × IO Unit) := []
+      let mut ($teardownFuncs) : List (IO Unit) := []
       $harness
   )
 
@@ -250,8 +247,8 @@ where
         | .success $name td =>
           ($teardownFuncs) := (td ++ $teardownFuncs)
           $body
-        | .error tn vn e td =>
-          return .error tn vn e (td ++ $teardownFuncs)
+        | .error e td =>
+          return .error e (td ++ $teardownFuncs)
       )
 
   /--
@@ -268,9 +265,9 @@ where
 
         try
           let (v, s) := ← (setup |>.run ($default))
-          return .success v (($name, (discard <| $teardownFunc |>.run s)) :: $teardownFuncs)
+          return .success v ((discard <| $teardownFunc |>.run s) :: $teardownFuncs)
         catch err =>
-          return .error $name `TODO err ($teardownFuncs)
+          return .error err ($teardownFuncs)
     )
 
 
@@ -317,7 +314,7 @@ macro (name := fixtureDecl)
 
     let σ := getFixtureType stateType
     let α := getFixtureType valueType
-    let setup ← mkFixtureRunner fixtures.toList nameStr default setup teardown σ α
+    let setup ← mkFixtureRunner fixtures.toList default setup teardown σ α
 
     let stx ← `(
       def $name : FixtureInfo $σ $α := {

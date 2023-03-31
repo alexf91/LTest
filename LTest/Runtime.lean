@@ -36,6 +36,14 @@ namespace CaptureResult
     | .error e _ _ => e
     | _ => panic! "result does not contain error"
 
+  def isError (r : CaptureResult α) := match r with
+    | .error _ _ _ => true
+    | _ => false
+
+  def isSuccess (r : CaptureResult α) := match r with
+    | .success _ _ _ => true
+    | _ => false
+
 end CaptureResult
 
 /--
@@ -64,8 +72,12 @@ def captureResult {α : Type} (f : IO α) : IO (CaptureResult α) := do
   Result of the transformed `setup` functions for fixtures.
 -/
 inductive SetupResult (α : Type) where
-  | success (value : α) (teardowns : List (Name × IO Unit))
-  | error (type : Name) (var : Name) (error : IO.Error) (teardowns : List (Name × IO Unit))
+  | success (value     : α)
+            (teardowns : List (IO Unit))
+            --(captures  : List (Name × CaptureResult Unit))
+  | error (error     : IO.Error)
+          (teardowns : List (IO Unit))
+          --(captures  : List (Name × CaptureResult Unit))
 
 
 /--
@@ -87,17 +99,22 @@ structure FixtureInfo (σ : Type) (α : Type) where
   fixture setup and teardown
 -/
 structure TestResult where
-  stdout         : ByteArray
-  stderr         : ByteArray
-  testcaseResult : CaptureResult Unit
-  setupError     : Option (Name × IO.Error)
-  teardownErrors : List (Name × IO.Error)
+  stdout          : ByteArray
+  stderr          : ByteArray
+  testcaseResult  : CaptureResult Unit
+  setupResults    : List (CaptureResult Unit)
+  teardownResults : List (CaptureResult Unit)
 
 namespace TestResult
-  def failure (r : TestResult) : Bool := match r.testcaseResult with
+  def isFailure (r : TestResult) : Bool := match r.testcaseResult with
     | .error _ _ _ => true
     | _            => false
-  def error   (r : TestResult) : Bool := !r.setupError.isNone || !r.teardownErrors.isEmpty
+
+  def isError (r : TestResult) : Bool :=
+    r.setupResults.any (fun r => r.isError) || r.teardownResults.any (fun r => r.isError)
+
+  def setupErrors    (r : TestResult) := r.setupResults.filter    fun r => r.isError
+  def teardownErrors (r : TestResult) := r.teardownResults.filter fun r => r.isError
 end TestResult
 
 
@@ -127,19 +144,21 @@ def main (names : List Name) (infos : List TestcaseInfo) (args : List String) : 
   for (name, info) in testcases do
     let result ← info.run
 
-    if result.error then
+    if result.isError then
       exitcode := 1
       IO.println s!"[ERROR] {name}"
-      if let some (name, error) := result.setupError then
+
+      if !result.setupErrors.isEmpty then
         IO.println "setup error:"
-        IO.println s!"{name}: {error}"
+        for error in result.setupErrors do
+          IO.println s!"{error.error!}"
 
       if !result.teardownErrors.isEmpty then
         IO.println "teardown errors:"
-        for (name, error) in result.teardownErrors do
-          IO.println s!"{name}: {error}"
+        for error in result.teardownErrors do
+          IO.println s!"{error.error!}"
 
-    else if result.failure then
+    else if result.isFailure then
       exitcode := 1
       IO.println s!"[FAIL] {name}: {result.testcaseResult.error!}"
 
