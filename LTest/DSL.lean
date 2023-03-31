@@ -45,7 +45,7 @@ def mkTestRunner (fixtures : List (Name × Name)) (body : TSyntax `term) : Macro
   let testRunner ← mkTestHarness fixtures testBody
   return ← `(
     do
-      let mut ($testcaseError)  : Option IO.Error          := none
+      let mut ($testcaseResult) : CaptureResult Unit       := default
       let mut ($setupError)     : Option (Name × IO.Error) := none
       let mut ($teardownErrors) : List (Name × IO.Error)   := []
       let mut ($teardownFuncs)  : List (Name × IO Unit)    := []
@@ -55,10 +55,10 @@ def mkTestRunner (fixtures : List (Name × Name)) (body : TSyntax `term) : Macro
           teardown
         catch err =>
           ($teardownErrors) := $teardownErrors ++ [(name, err)]
-      return ($testcaseError, $setupError, $teardownErrors)
+      return ($testcaseResult, $setupError, $teardownErrors)
   )
 where
-  testcaseError  := mkIdent (`testcaseError  |>.appendAfter "✝")
+  testcaseResult := mkIdent (`testcaseResult |>.appendAfter "✝")
   setupError     := mkIdent (`setupError     |>.appendAfter "✝")
   teardownErrors := mkIdent (`teardownErrors |>.appendAfter "✝")
   teardownFuncs  := mkIdent (`teardown       |>.appendAfter "✝")
@@ -66,10 +66,10 @@ where
     match fixtures with
     | [] =>
       return body
-    | (name, fixture)::fs =>
+    | (varName, typeName)::fs =>
       let body   ← mkTestHarness fs body
-      let name  := mkIdent name
-      let setup := mkIdent (fixture ++ `setup)
+      let name  := mkIdent varName
+      let setup := mkIdent (typeName ++ `setup)
 
       return ← `(Term.doSeqItem|
           match ← ($setup) with
@@ -83,10 +83,7 @@ where
 
   mkTestBody := do
     return ← `(Term.doSeqItem|
-      try
-        ($body)
-      catch err =>
-        ($testcaseError) := some err
+      ($testcaseResult) := ← captureResult ($body)
     )
 
 
@@ -127,11 +124,11 @@ macro (name := testcaseDecl)
       do
         -- This always succeeds, so we can ignore the error case.
         match (← captureResult $testRunner) with
-        | .success (testcaseError, setupError, teardownErrors) out err =>
+        | .success (testcaseResult, setupError, teardownErrors) out err =>
           return {
             stdout := out
             stderr := err
-            testcaseError  := testcaseError
+            testcaseResult := testcaseResult
             setupError     := setupError
             teardownErrors := teardownErrors
           }

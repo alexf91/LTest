@@ -23,6 +23,44 @@ set_option relaxedAutoImplicit false
 namespace LTest
 
 /--
+  Captured result.
+-/
+inductive CaptureResult (α : Type) where
+  | success (value : α)        (stdout : ByteArray) (stderr : ByteArray)
+  | error   (error : IO.Error) (stdout : ByteArray) (stderr : ByteArray)
+  deriving Inhabited
+
+namespace CaptureResult
+
+  def error! (r : CaptureResult α) := match r with
+    | .error e _ _ => e
+    | _ => panic! "result does not contain error"
+
+end CaptureResult
+
+/--
+  Capture stdout, stderr and exceptions.
+
+  This is taken from withIsolatedStreams in Lean/System/IO.lean and
+  modified to split stdout and stderr.
+
+  We also catch exceptions here to get the output if the function fails.
+-/
+def captureResult {α : Type} (f : IO α) : IO (CaptureResult α) := do
+    let bIn  ← IO.mkRef { : IO.FS.Stream.Buffer }
+    let bOut ← IO.mkRef { : IO.FS.Stream.Buffer }
+    let bErr ← IO.mkRef { : IO.FS.Stream.Buffer }
+
+    try
+      let r := (← IO.withStdin  (IO.FS.Stream.ofBuffer bIn)  <|
+                  IO.withStdout (IO.FS.Stream.ofBuffer bOut) <|
+                  IO.withStderr (IO.FS.Stream.ofBuffer bErr) f)
+      return .success r (← bOut.get).data (← bErr.get).data
+    catch err =>
+      return .error err (← bOut.get).data (← bErr.get).data
+
+
+/--
   Result of the transformed `setup` functions for fixtures.
 -/
 inductive SetupResult (α : Type) where
@@ -51,12 +89,14 @@ structure FixtureInfo (σ : Type) (α : Type) where
 structure TestResult where
   stdout         : ByteArray
   stderr         : ByteArray
-  testcaseError  : Option IO.Error
+  testcaseResult : CaptureResult Unit
   setupError     : Option (Name × IO.Error)
   teardownErrors : List (Name × IO.Error)
 
 namespace TestResult
-  def failure (r : TestResult) : Bool := !r.testcaseError.isNone
+  def failure (r : TestResult) : Bool := match r.testcaseResult with
+    | .error _ _ _ => true
+    | _            => false
   def error   (r : TestResult) : Bool := !r.setupError.isNone || !r.teardownErrors.isEmpty
 end TestResult
 
@@ -70,35 +110,6 @@ end TestResult
 structure TestcaseInfo where
   doc  : Option String
   run  : IO TestResult
-
-/--
-  Captured result.
--/
-inductive CaptureResult (α : Type) where
-  | success (value : α)        (stdout : ByteArray) (stderr : ByteArray)
-  | error   (error : IO.Error) (stdout : ByteArray) (stderr : ByteArray)
-
-
-/--
-  Capture stdout, stderr and exceptions.
-
-  This is taken from withIsolatedStreams in Lean/System/IO.lean and
-  modified to split stdout and stderr.
-
-  We also catch exceptions here to get the output if the function fails.
--/
-def captureResult {α : Type} (f : IO α) : IO (CaptureResult α) := do
-    let bIn  ← IO.mkRef { : IO.FS.Stream.Buffer }
-    let bOut ← IO.mkRef { : IO.FS.Stream.Buffer }
-    let bErr ← IO.mkRef { : IO.FS.Stream.Buffer }
-
-    try
-      let r := (← IO.withStdin  (IO.FS.Stream.ofBuffer bIn)  <|
-                  IO.withStdout (IO.FS.Stream.ofBuffer bOut) <|
-                  IO.withStderr (IO.FS.Stream.ofBuffer bErr) f)
-      return .success r (← bOut.get).data (← bErr.get).data
-    catch err =>
-      return .error err (← bOut.get).data (← bErr.get).data
 
 
 /--
@@ -130,7 +141,7 @@ def main (names : List Name) (infos : List TestcaseInfo) (args : List String) : 
 
     else if result.failure then
       exitcode := 1
-      IO.println s!"[FAIL] {name}: {result.testcaseError.get!}"
+      IO.println s!"[FAIL] {name}: {result.testcaseResult.error!}"
 
     else
       IO.println s!"[PASS] {name}"
