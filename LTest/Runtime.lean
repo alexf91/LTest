@@ -14,54 +14,15 @@
 -- limitations under the License.
 --
 
+import LTest.Types
 import Lean
 import Cli
 open Lean
+open Cli
 
 set_option relaxedAutoImplicit false
 
 namespace LTest
-
-/--
-  Captured result.
--/
-inductive CaptureResult (α : Type) where
-  | success (value : α)        (stdout : ByteArray) (stderr : ByteArray)
-  | error   (error : IO.Error) (stdout : ByteArray) (stderr : ByteArray)
-  deriving Inhabited
-
-namespace CaptureResult
-
-  def error! (r : CaptureResult α) := match r with
-    | .error e _ _ => e
-    | _ => panic! "result does not contain error"
-
-  def value! [Inhabited α] (r : CaptureResult α) := match r with
-    | .success v _ _ => v
-    | _ => panic! "result does not contain value"
-
-  def isError (r : CaptureResult α) := match r with
-    | .error _ _ _ => true
-    | _ => false
-
-  def isSuccess (r : CaptureResult α) := match r with
-    | .success _ _ _ => true
-    | _ => false
-
-  /-- Return the same object, but replace the value with `()`. -/
-  def withoutValue (r : CaptureResult α) : CaptureResult Unit := match r with
-    | .success _ out err => .success () out err
-    | .error e out err   => .error e out err
-
-  def stdout (r : CaptureResult α) := match r with
-    | .success _ out _ => out
-    | .error   _ out _ => out
-
-  def stderr (r : CaptureResult α) := match r with
-    | .success _ _ err => err
-    | .error   _ _ err => err
-
-end CaptureResult
 
 /--
   Capture stdout, stderr and exceptions.
@@ -85,91 +46,25 @@ def captureResult {α : Type} (f : IO α) : IO (CaptureResult α) := do
       return .error err (← bOut.get).data (← bErr.get).data
 
 
-/--
-  Result of the transformed `setup` functions for fixtures.
--/
-inductive SetupResult (α : Type) where
-  | success (value     : α)
-            (teardowns : List (Name × IO Unit))
-            (captures  : List (Name × CaptureResult Unit))
-  | error (error     : IO.Error)
-          (teardowns : List (Name × IO Unit))
-          (captures  : List (Name × CaptureResult Unit))
-  deriving Inhabited
-
-namespace SetupResult
-
-  def teardowns (r : SetupResult α) := match r with
-    | .success _ tds _ => tds
-    | .error   _ tds _ => tds
-
-  def captures (r : SetupResult α) := match r with
-    | .success _ _ cs => cs
-    | .error   _ _ cs => cs
-
-end SetupResult
-
-/--
-  Fixture with a state of type `σ` and a value of type `α`.
-
-  The state is updated by the `setup` and `teardown` functions, the value is passed
-  to a testcase or another fixture that depends on the fixture.
--/
-structure FixtureInfo (σ : Type) (α : Type) where
-  name  : Name
-  doc   : Option String := none
-  setup : IO (SetupResult α)
+/-- Write test results as JSON to a file. -/
+def createJsonResult (results : List (Name × TestResult)) : Json := Id.run do
+  return Json.null
 
 
-/--
-  Result of a testcase.
+/-- Testrunner called by the command line parser. -/
+def runTests (testcases : List (Name × TestcaseInfo)) (p : Parsed) : IO UInt32 := do
+  -- Print available tests and exit.
+  if p.hasFlag "list-tests" then
+    for (name, _) in testcases do
+      IO.println name
+    return 0
 
-  This includes the the result of the test itself and everything from
-  fixture setup and teardown
--/
-structure TestResult where
-  testcaseResult  : CaptureResult Unit
-  setupResults    : List (Name × CaptureResult Unit)
-  teardownResults : List (Name × CaptureResult Unit)
-
-namespace TestResult
-  def isFailure (r : TestResult) : Bool := match r.testcaseResult with
-    | .error _ _ _ => true
-    | _            => false
-
-  def isError (r : TestResult) : Bool :=
-    r.setupResults.any (fun r => r.2.isError) || r.teardownResults.any (fun r => r.2.isError)
-
-  def setupErrors    (r : TestResult) := r.setupResults.filter    fun r => r.2.isError
-  def teardownErrors (r : TestResult) := r.teardownResults.filter fun r => r.2.isError
-end TestResult
-
-
-/--
-  Information about a testcase.
-
-  This structure contains meta data gathered during collection and the testrunner
-  with fixture setup and teardown.
--/
-structure TestcaseInfo where
-  doc  : Option String
-  run  : IO TestResult
-
-
-/--
-  Prototype of the main function.
-
-  The first few arguments are set by the `#LTestMain` command and the compiler then
-  uses the remaining function as entry point.
-
-  TODO: Combine the names and infos list.
--/
-def main (names : List Name) (infos : List TestcaseInfo) (args : List String) : IO UInt32 := do
-  let testcases := List.zip names infos
   let mut exitcode : UInt32 := 0
+  let mut results : List (Name × TestResult) := []
 
   for (name, info) in testcases do
     let result ← info.run
+    results := results ++ [(name, result)]
 
     if result.isError then
       exitcode := 1
@@ -187,11 +82,37 @@ def main (names : List Name) (infos : List TestcaseInfo) (args : List String) : 
 
     else if result.isFailure then
       exitcode := 1
-      IO.println s!"[FAIL] {name}: {result.testcaseResult.error!}"
+      IO.println s!"[FAIL] {name}: {result.testcaseResult.get!.error!}"
 
     else
       IO.println s!"[PASS] {name}"
 
+  -- Write the JSON output.
+  if let some path := p.flag? "json-output" then
+    let r := createJsonResult results
+    IO.FS.writeFile path.value r.pretty
+
   return exitcode
+
+
+/-- Parser for the test runner. -/
+private def parseCommand (testcases : List (Name × TestcaseInfo)) : Cmd := `[Cli|
+  "<executable>" VIA runTests testcases;
+  "Execute tests and report results."
+
+  FLAGS:
+    "json-output" : String; "Write test results to a JSON file"
+    "list-tests";           "Show all available tests and exit"
+]
+
+/--
+  Prototype of the main function.
+
+  The first few arguments are set by the `#LTestMain` command and the compiler then
+  uses the remaining function as entry point.
+-/
+def main (names : List Name) (infos : List TestcaseInfo) (args : List String) : IO UInt32 := do
+  let testcases := List.zip names infos
+  parseCommand testcases |>.validate args
 
 end LTest

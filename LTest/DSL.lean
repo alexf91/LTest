@@ -14,8 +14,9 @@
 -- limitations under the License.
 --
 
-import LTest.Runtime
 import LTest.Extension
+import LTest.Runtime
+import LTest.Types
 import Lean
 import Lean.Parser
 open Lean
