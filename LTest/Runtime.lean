@@ -76,9 +76,15 @@ def runTests (testcases : List (Name × TestcaseInfo)) (p : Parsed) : IO UInt32 
         for (name, (err, streams)) in result.teardownErrors do
           IO.println s!"{name}: {err}"
 
+      if p.hasFlag "exitfirst" then
+        break
+
     else if result.type == .failure then
       exitcode := 1
       IO.println s!"[FAIL] {name}: {result.testcaseResult.get!.error!.1}"
+
+      if p.hasFlag "exitfirst" then
+        break
 
     else
       IO.println s!"[PASS] {name}"
@@ -99,6 +105,7 @@ private def parseCommand (testcases : List (Name × TestcaseInfo)) : Cmd := `[Cl
   FLAGS:
     "json-output" : String; "Write test results to a JSON file"
     "list-tests";           "Show all available tests and exit"
+    "x", "exitfirst";       "Exit instantly on first error or failed test"
 ]
 
 /--
