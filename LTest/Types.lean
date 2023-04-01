@@ -22,69 +22,55 @@ set_option relaxedAutoImplicit false
 
 namespace LTest
 
-/--
-  Captured result.
--/
-inductive CaptureResult (α : Type) where
-  | success (value : α)        (stdout : ByteArray) (stderr : ByteArray)
-  | error   (error : IO.Error) (stdout : ByteArray) (stderr : ByteArray)
+/-- A pair of standard out and error. -/
+structure Streams where
+  stdout : ByteArray
+  stderr : ByteArray
   deriving Inhabited
+
+/-- Result of the error branch of `CaptureResult`. -/
+abbrev CaptureError := (IO.Error × Streams)
+deriving instance Inhabited for CaptureError
+
+/-- Result of the okay branch of `CaptureResult`. -/
+abbrev CaptureOkay := Streams
+deriving instance Inhabited for CaptureOkay
+
+/-- Result type to store output captures for reporting. -/
+abbrev CaptureResult := Except CaptureError CaptureOkay
+deriving instance Inhabited for CaptureResult
 
 namespace CaptureResult
+  def error! (r : CaptureResult) : CaptureError := match r with
+  | Except.error e => e
+  | _              => panic! "result does not contain error"
 
-  def error! (r : CaptureResult α) := match r with
-    | .error e _ _ => e
-    | _ => panic! "result does not contain error"
-
-  def value! [Inhabited α] (r : CaptureResult α) := match r with
-    | .success v _ _ => v
-    | _ => panic! "result does not contain value"
-
-  def isError (r : CaptureResult α) := match r with
-    | .error _ _ _ => true
-    | _ => false
-
-  def isSuccess (r : CaptureResult α) := match r with
-    | .success _ _ _ => true
-    | _ => false
-
-  /-- Return the same object, but replace the value with `()`. -/
-  def withoutValue (r : CaptureResult α) : CaptureResult Unit := match r with
-    | .success _ out err => .success () out err
-    | .error e out err   => .error e out err
-
-  def stdout (r : CaptureResult α) := match r with
-    | .success _ out _ => out
-    | .error   _ out _ => out
-
-  def stderr (r : CaptureResult α) := match r with
-    | .success _ _ err => err
-    | .error   _ _ err => err
-
+  def ok! (r : CaptureResult) : CaptureOkay := match r with
+  | Except.ok e => e
+  | _           => panic! "result does not contain value"
 end CaptureResult
 
+/-- Result of the error branch of `SetupResult`: `(error, teardowns, captures)` -/
+abbrev SetupError := (IO.Error × List (Name × IO Unit) × List (Name × CaptureResult))
+deriving instance Inhabited for SetupError
 
-/--
-  Result of the transformed `setup` functions for fixtures.
--/
-inductive SetupResult (α : Type) where
-  | success (value     : α)
-            (teardowns : List (Name × IO Unit))
-            (captures  : List (Name × CaptureResult Unit))
-  | error (error     : IO.Error)
-          (teardowns : List (Name × IO Unit))
-          (captures  : List (Name × CaptureResult Unit))
-  deriving Inhabited
+/-- Result of the okay branch of `SetupResult`: `(value, teardowns, captures)` -/
+abbrev SetupOkay (α : Type) := (α × List (Name × IO Unit) × List (Name × CaptureResult))
+instance [Inhabited α] : Inhabited (SetupOkay α) := inferInstance
+
+/-- Results of the transformed `setup` functions for fixtures. -/
+abbrev SetupResult (α : Type) := Except SetupError (SetupOkay α)
+instance [Inhabited α] : Inhabited (SetupResult α) := inferInstance
 
 namespace SetupResult
 
   def teardowns (r : SetupResult α) := match r with
-    | .success _ tds _ => tds
-    | .error   _ tds _ => tds
+    | .ok    (_, tds, _) => tds
+    | .error (_, tds, _) => tds
 
   def captures (r : SetupResult α) := match r with
-    | .success _ _ cs => cs
-    | .error   _ _ cs => cs
+    | .ok    (_, _, cs) => cs
+    | .error (_, _, cs) => cs
 
 end SetupResult
 
@@ -100,6 +86,13 @@ structure FixtureInfo (σ : Type) (α : Type) where
   setup : IO (SetupResult α)
 
 
+/-- Type of a test result. -/
+inductive TestResultType where
+  | success
+  | failure
+  | error
+  deriving Inhabited, BEq
+
 /--
   Result of a testcase.
 
@@ -107,20 +100,31 @@ structure FixtureInfo (σ : Type) (α : Type) where
   fixture setup and teardown
 -/
 structure TestResult where
-  testcaseResult  : Option (CaptureResult Unit)
-  setupResults    : List (Name × CaptureResult Unit)
-  teardownResults : List (Name × CaptureResult Unit)
+  testcaseResult  : Option CaptureResult
+  setupResults    : List (Name × CaptureResult)
+  teardownResults : List (Name × CaptureResult)
 
 namespace TestResult
-  def isFailure (r : TestResult) : Bool := match r.testcaseResult with
-    | some (.error _ _ _) => true
-    | _                   => false
+  def type (r : TestResult) : TestResultType :=
+    let failure := match r.testcaseResult with
+      | some (Except.error _) => true
+      | _                     => false
+    let error := r.setupResults.any (fun r => !r.2.isOk) || r.teardownResults.any (fun r => !r.2.isOk)
+    match (failure, error) with
+      | (_, true) => .error
+      | (true, _) => .failure
+      | _         => .success
 
-  def isError (r : TestResult) : Bool :=
-    r.setupResults.any (fun r => r.2.isError) || r.teardownResults.any (fun r => r.2.isError)
+  def setupErrors (r : TestResult) : List (Name × CaptureError) :=
+    r.setupResults.filterMap fun (n, c) => match c with
+    | Except.error e => some (n, e)
+    | _              => none
 
-  def setupErrors    (r : TestResult) := r.setupResults.filter    fun r => r.2.isError
-  def teardownErrors (r : TestResult) := r.teardownResults.filter fun r => r.2.isError
+  def teardownErrors (r : TestResult) : List (Name × CaptureError) :=
+    r.teardownResults.filterMap fun (n, c) => match c with
+    | Except.error e => some (n, e)
+    | _              => none
+
 end TestResult
 
 

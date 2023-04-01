@@ -47,14 +47,18 @@ private def mkTestRunner (fixtures : List (Name × Name))
   let testRunner ← mkTestHarness fixtures testBody
   return ← `(
     do
-      let mut ($testcaseResult)  : CaptureResult Unit               := default
-      let mut ($setupResults)    : List (Name × CaptureResult Unit) := []
-      let mut ($teardownResults) : List (Name × CaptureResult Unit) := []
-      let mut ($teardownFuncs)   : List (Name × IO Unit)            := []
+      let mut ($testcaseResult)  : Option CaptureResult        := none
+      let mut ($setupResults)    : List (Name × CaptureResult) := []
+      let mut ($teardownResults) : List (Name × CaptureResult) := []
+      let mut ($teardownFuncs)   : List (Name × IO Unit)       := []
       $testRunner
       for (name, td) in $teardownFuncs do
-        let r ← captureResult td
-        ($teardownResults) := $teardownResults ++ [(name, r)]
+        let (r, streams) ← captureResult td
+        let tdr : CaptureResult := match r with
+          | .ok _    => .ok streams
+          | .error e => .error (e, streams)
+
+        ($teardownResults) := $teardownResults ++ [(name, tdr)]
       return ($testcaseResult, $setupResults, $teardownResults)
   )
 where
@@ -72,20 +76,23 @@ where
       let setup := mkIdent (typeName ++ `setup)
 
       return ← `(Term.doSeqItem| do
-          let r : SetupResult _ ← ($setup)
-          match r with
-            | .success $name _ cs =>
-              $body:doSeqItem
-              ($setupResults) := cs ++ $setupResults
-            | .error e _ cs =>
-              ($setupResults) := cs ++ $setupResults
+        let r : SetupResult _ ← ($setup)
+        match r with
+        | .ok ($name, _, cs) =>
+          $body:doSeqItem
+          ($setupResults) := cs ++ $setupResults
+        | .error (e, _, cs) =>
+          ($setupResults) := cs ++ $setupResults
 
-          ($teardownFuncs) := ($teardownFuncs) ++ r.teardowns
+        ($teardownFuncs) := ($teardownFuncs) ++ r.teardowns
       )
 
   mkTestBody := do
-    return ← `(Term.doSeqItem|
-      ($testcaseResult) ← captureResult ($body)
+    return ← `(Term.doSeqItem| do
+      let (r, streams) ← @captureResult Unit ($body)
+      ($testcaseResult) := match r with
+        | .ok _    => some $ .ok streams
+        | .error e => some $ .error (e, streams)
     )
 
 /--
@@ -224,8 +231,8 @@ private def mkFixtureRunner (fixtures  : List (Name × Name))
   return ← `(
     let ($teardownFunc) : StateT $stateType IO Unit := ($teardown)
     do
-      let mut ($teardownFuncs) : List (Name × IO Unit)            := []
-      let mut ($setupResults)  : List (Name × CaptureResult Unit) := []
+      let mut ($teardownFuncs) : List (Name × IO Unit)       := []
+      let mut ($setupResults)  : List (Name × CaptureResult) := []
       $harness
   )
 
@@ -249,11 +256,11 @@ where
         let r : SetupResult _ ← ($setup)
         ($setupResults) := $setupResults ++ r.captures
         match r with
-        | .success $name tds cs =>
-          ($teardownFuncs) := (tds ++ $teardownFuncs)
+        | .ok ($name, tds, cs) =>
+          ($teardownFuncs) := tds ++ $teardownFuncs
           $body
-        | .error e tds cs =>
-          return .error e (tds ++ $teardownFuncs) ($setupResults)
+        | .error (e, tds, cs) =>
+          return .error (e, (tds ++ $teardownFuncs), ($setupResults))
       )
 
   /--
@@ -269,13 +276,21 @@ where
         -- TODO: Limit which variables are visible in the setup function.
         --       Currently it shows multiple inaccessible `teardowns` lists and more.
         let setup : StateT $stateType IO $valueType := $setup
-        let r ← captureResult (setup |>.run $default)
+        let (r, streams) ← captureResult (setup |>.run $default)
         match r with
-        | .success (v, s) _ cs =>
+        | .ok (v, s) =>
           let td := (discard <| $teardownFunc |>.run s)
-          return .success v (($typeName, td) :: $teardownFuncs) ($setupResults ++ [($typeName, r.withoutValue)])
-        | .error err _ cs =>
-          return .error err $teardownFuncs ($setupResults ++ [($typeName, r.withoutValue)])
+          return .ok (
+            v,
+            (($typeName, td) :: $teardownFuncs),
+            ($setupResults ++ [($typeName, .ok streams)])
+          )
+        | .error err =>
+          return .error (
+            err,
+            $teardownFuncs,
+            ($setupResults ++ [($typeName, .error (err, streams))])
+          )
     )
 
 

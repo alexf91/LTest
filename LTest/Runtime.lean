@@ -32,7 +32,7 @@ namespace LTest
 
   We also catch exceptions here to get the output if the function fails.
 -/
-def captureResult {α : Type} (f : IO α) : IO (CaptureResult α) := do
+def captureResult {α : Type} (f : IO α) : IO (Except IO.Error α × Streams) := do
     let bIn  ← IO.mkRef { : IO.FS.Stream.Buffer }
     let bOut ← IO.mkRef { : IO.FS.Stream.Buffer }
     let bErr ← IO.mkRef { : IO.FS.Stream.Buffer }
@@ -41,9 +41,9 @@ def captureResult {α : Type} (f : IO α) : IO (CaptureResult α) := do
       let r := (← IO.withStdin  (IO.FS.Stream.ofBuffer bIn)  <|
                   IO.withStdout (IO.FS.Stream.ofBuffer bOut) <|
                   IO.withStderr (IO.FS.Stream.ofBuffer bErr) f)
-      return .success r (← bOut.get).data (← bErr.get).data
+      return (.ok r, .mk (← bOut.get).data (← bErr.get).data)
     catch err =>
-      return .error err (← bOut.get).data (← bErr.get).data
+      return (.error err, .mk (← bOut.get).data (← bErr.get).data)
 
 
 /-- Write test results as JSON to a file. -/
@@ -66,23 +66,23 @@ def runTests (testcases : List (Name × TestcaseInfo)) (p : Parsed) : IO UInt32 
     let result ← info.run
     results := results ++ [(name, result)]
 
-    if result.isError then
+    if result.type == .error then
       exitcode := 1
       IO.println s!"[ERROR] {name}"
 
       if !result.setupErrors.isEmpty then
         IO.println "setup error:"
-        for (name, error) in result.setupErrors do
-          IO.println s!"{name}: {error.error!}"
+        for (name, (err, streams)) in result.setupErrors do
+          IO.println s!"{name}: {err}"
 
       if !result.teardownErrors.isEmpty then
         IO.println "teardown errors:"
-        for (name, error) in result.teardownErrors do
-          IO.println s!"{name}: {error.error!}"
+        for (name, (err, streams)) in result.teardownErrors do
+          IO.println s!"{name}: {err}"
 
-    else if result.isFailure then
+    else if result.type == .failure then
       exitcode := 1
-      IO.println s!"[FAIL] {name}: {result.testcaseResult.get!.error!}"
+      IO.println s!"[FAIL] {name}: {result.testcaseResult.get!.error!.1}"
 
     else
       IO.println s!"[PASS] {name}"
