@@ -26,10 +26,3 @@ require LTest from ".."
 
 @[default_target]
 lean_exe Example
-
--- Script to build and run tests.
-script tests (args : List String) do
-  discard <| IO.Process.run {cmd := "lake", args := #["build", "Example"]}
-  let process ← IO.Process.spawn {cmd := "build/bin/Example", args := args.toArray}
-  let result ← process.wait
-  return result
