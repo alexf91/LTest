@@ -47,16 +47,32 @@ def captureResult {α : Type} (f : IO α) : IO (Except IO.Error α × Streams) :
       return (.error err, .mk (← bOut.get).data (← bErr.get).data)
 
 
+/-- Filter out tests by name. -/
+def filterTests (testcases : List (Name × TestcaseInfo)) (pattern : String) :=
+  testcases.filter fun (n, _) => f n
+where
+  f (n : Name) : Bool := (n.toString.splitOn pattern |>.length) > 1
+
+
 /-- Testrunner called by the command line parser. -/
 def runTests (testcases : List (Name × TestcaseInfo)) (p : Parsed) : IO UInt32 := do
+  -- Filter testcases if the flag is specified.
+  let testcases := match p.flag? "filter" with
+    | some flag => filterTests testcases flag.value
+    | _         => testcases
+
   -- Print available tests and exit.
-  if p.hasFlag "list-tests" then
+  if p.hasFlag "collect-only" then
     for (name, _) in testcases do
       IO.println name
     return 0
 
   let mut exitcode : UInt32 := 0
   let mut results : List (Name × TestResult) := []
+
+  if p.hasFlag "verbose" then
+    IO.eprintln "verbose flag not implemented"
+    return 1
 
   for (name, info) in testcases do
     let result ← info.run
@@ -104,8 +120,11 @@ private def parseCommand (testcases : List (Name × TestcaseInfo)) : Cmd := `[Cl
 
   FLAGS:
     "json-output" : String; "Write test results to a JSON file"
-    "list-tests";           "Show all available tests and exit"
+    "collect-only";         "Only collect tests, don't execute them"
     "x", "exitfirst";       "Exit instantly on first error or failed test"
+    "v", "verbose";         "Increase verbosity"
+    "k", "filter" : String; "Only run tests which contain the given substring. " ++
+                            "The match is performed on the full dotted name."
 ]
 
 /--
