@@ -60,6 +60,16 @@ def render_code(code):
     return template.format(CODE=code)
 
 
+def load_results(fp):
+    """Load the JSON result and convert a few fields.
+
+    * Turn it into a dictionary
+    * TODO: Convert stdout and stderr to byte arrays
+    """
+    result = dict(json.load(fp))
+    return result
+
+
 @pytest.fixture(scope="session")
 def lakefile(pytestconfig):
     """Download Lean packages to speed up building and return the Lakefile."""
@@ -96,7 +106,7 @@ def program(tmp_path, lakefile):
 
         # Run the program with JSON output.
         lean = sp.run(
-            ["build/bin/Program", "--json-output", "result.json"],
+            ["build/bin/Program", "--json-output", "results.json"],
             capture_output=True,
             encoding="utf8",
             cwd=tmp_path,
@@ -104,14 +114,14 @@ def program(tmp_path, lakefile):
 
         # Open the JSON file and add it to the lean result.
         try:
-            with open(tmp_path / "result.json") as fp:
-                lean.result = json.load(fp)
+            with open(tmp_path / "results.json") as fp:
+                lean.results = load_results(fp)
         except FileNotFoundError:
-            lean.result = None
+            lean.results = None
 
         # Open the trace file and add it to the lean result.
         try:
-            with open(tmp_path / "result.trace") as fp:
+            with open(tmp_path / "results.trace") as fp:
                 lean.trace = [line.rstrip() for line in fp.readlines()]
         except FileNotFoundError:
             lean.trace = None
