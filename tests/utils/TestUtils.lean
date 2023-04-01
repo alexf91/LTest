@@ -14,30 +14,13 @@
 -- limitations under the License.
 --
 
-/-
-  Run a testcase with fixtures where nothing fails.
--/
-
-import LTest
-open LTest
-
+namespace TestUtils
 
 /--
-  Check if the directory exists and create a file in it.
+  Write a string to the file `trace` in the current working directory.
 -/
-testcase CreateFile requires (dir : TempDir) := do
-  assertTrue $ ← dir.pathExists
-  assertTrue $ ← dir.isDir
-  let file := dir / "somefile"
-  IO.FS.writeFile file "FOOBAR"
+def trace (msg : String) : IO Unit := do
+  IO.FS.withFile "result.trace" IO.FS.Mode.append $ fun fp => do
+    fp.putStrLn msg
 
-/--
-  Delete the directory in the testcase.
--/
-testcase DeleteDir requires (dir : TempDir) := do
-  discard $ IO.Process.run {
-    cmd := "rm"
-    args := #["-rf", dir.toString]
-  }
-
-#LTestMain
+end TestUtils

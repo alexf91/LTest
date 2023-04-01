@@ -1,4 +1,0 @@
-exitcode: 0
-stdout: |
-  [PASS] CreateFile
-  [PASS] DeleteDir

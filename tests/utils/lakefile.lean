@@ -18,24 +18,7 @@
 import Lake
 open Lake DSL
 
-package Tests
+package TestUtils
 
+@[default_target]
 lean_lib TestUtils
-
-require LTest from ".."
-
-lean_exe test_trace
-lean_exe test_trace_setup_fail
-lean_exe test_trace_teardown_fail
-lean_exe test_trace_test_fail
-lean_exe test_fixture_types
-lean_exe test_tempdir_fixture
-
-lean_exe test_trace_nested_linear_single
-lean_exe test_trace_nested_linear_multi
-lean_exe test_trace_nested_tree
-lean_exe test_trace_nested_forest
-
-lean_exe test_trace_nested_setup_fail
-lean_exe test_trace_nested_teardown_fail
-lean_exe test_trace_nested_testcase_fail
