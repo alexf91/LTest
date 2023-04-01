@@ -15,6 +15,7 @@
 --
 
 import LTest.Types
+import LTest.Instances
 import Lean
 import Cli
 open Lean
@@ -44,11 +45,6 @@ def captureResult {α : Type} (f : IO α) : IO (Except IO.Error α × Streams) :
       return (.ok r, .mk (← bOut.get).data (← bErr.get).data)
     catch err =>
       return (.error err, .mk (← bOut.get).data (← bErr.get).data)
-
-
-/-- Write test results as JSON to a file. -/
-def createJsonResult (results : List (Name × TestResult)) : Json := Id.run do
-  return Json.null
 
 
 /-- Testrunner called by the command line parser. -/
@@ -89,7 +85,7 @@ def runTests (testcases : List (Name × TestcaseInfo)) (p : Parsed) : IO UInt32 
 
   -- Write the JSON output.
   if let some path := p.flag? "json-output" then
-    let r := createJsonResult results
+    let r := toJson results
     IO.FS.writeFile path.value r.pretty
 
   return exitcode
