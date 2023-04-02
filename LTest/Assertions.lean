@@ -19,16 +19,16 @@ set_option relaxedAutoImplicit false
 
 namespace LTest
 
-def assertTrue (p : Bool) : IO Unit := do
+def assertTrue (p : Bool) (msg : String := "assertion failed") : IO Unit := do
   unless p do
-    throw $ IO.userError "assertion failed"
+    throw $ IO.userError msg
 
-def assertFalse (p : Bool) : IO Unit := do
+def assertFalse (p : Bool) (msg : String := "assertion failed") : IO Unit := do
   unless !p do
-    throw $ IO.userError "assertion failed"
+    throw $ IO.userError msg
 
-def assertEqual [BEq α] (a : α) (b : α): IO Unit := do
+def assertEqual [BEq α] (a : α) (b : α) (msg : String := "assertion failed") : IO Unit := do
   unless a == b do
-    throw $ IO.userError "assertion failed"
+    throw $ IO.userError msg
 
 end LTest
