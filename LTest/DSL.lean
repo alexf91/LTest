@@ -42,7 +42,7 @@ def fixtureDependency := leading_parser
   This creates the runner for the testcase itself and the setup and teardown code of fixtures.
 -/
 private def mkTestRunner (fixtures : List (Name × Name))
-                         (body : TSyntax `term) : MacroM (TSyntax `term) := do
+                         (body : Term) : MacroM Term := do
   let testBody ← mkTestBody
   let testRunner ← mkTestHarness fixtures testBody
   return ← `(
@@ -184,7 +184,7 @@ def fixtureFields := leading_parser
 def fixtureType := leading_parser
   ("(" >> termParser >> ")") <|> (ident)
 
-private def getFixtureType (stx : Syntax) : TSyntax `term :=
+private def getFixtureType (stx : Syntax) : Term :=
   match stx.getNumArgs with
   | 1 => TSyntax.mk $ stx.getArg 0
   | 3 => TSyntax.mk $ stx.getArg 1
@@ -219,12 +219,12 @@ private def checkFixtureFields (stx : TSyntax `LTest.fixtureFields) : MacroM Uni
   The result contains teardown functions of all dependent fixtures.
 -/
 private def mkFixtureRunner (fixtures  : List (Name × Name))
-                            (typeName  : TSyntax `term)
-                            (default   : TSyntax `term)
-                            (setup     : TSyntax `term)
-                            (teardown  : TSyntax `term)
-                            (stateType : TSyntax `term)
-                            (valueType : TSyntax `term) : MacroM (TSyntax `term) := do
+                            (typeName  : Term)
+                            (default   : Term)
+                            (setup     : Term)
+                            (teardown  : Term)
+                            (stateType : Term)
+                            (valueType : Term) : MacroM Term := do
 
   let body ← mkFixtureBody
   let harness ← mkFixtureHarness fixtures body
@@ -295,19 +295,16 @@ where
 
 /--
   Create a `Term` from a `Name`.
-
-  TODO: Maybe use a coercion?
 -/
-def mkNameTerm (name : Name) : MacroM (TSyntax `term) := do
+private def mkNameTerm (name : Name) : MacroM Term := do
    mk name.componentsRev
 where
-  mk (cs : List Name) : MacroM (TSyntax `term) := do
+  mk (cs : List Name) : MacroM Term := do
   match cs with
-  | []        => return ← `(Name.anonymous)
-  | c::cs     =>
+  | []    => return ← `(Name.anonymous)
+  | c::cs =>
     let cc ← `(Name.mkSimple $(Syntax.mkStrLit c.toString))
-    let nn ← mk cs
-    return ← `(Name.append $nn $cc)
+    return ← `(Name.append $(← mk cs) $cc)
 
 macro (name := fixtureDecl)
   doc?:optional(docComment)                         -- Documentation
@@ -333,7 +330,7 @@ macro (name := fixtureDecl)
     checkFixtureFields fields
 
     -- Find the terms for the fields we need. We already ensured that they exist.
-    let getField (name : Name) (default : TSyntax `term) : TSyntax `term :=
+    let getField (name : Name) (default : Term) : Term :=
       let result := fields.raw[0].getArgs.findSome? fun f =>
         if f[0].getId == name then
           some $ TSyntax.mk f[1][1]
