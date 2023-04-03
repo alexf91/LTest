@@ -19,6 +19,35 @@
 import pytest
 
 
+def test_namespace(program):
+    """Check if the names in capture results are fully qualified."""
+    CODE = """
+        namespace A
+          fixture FixtureA Unit Unit where
+            setup := do return
+          namespace B
+            fixture FixtureB Unit Unit requires (x : FixtureA) where
+              setup := do return
+          end B
+        end A
+
+        fixture A.B.C.FixtureC Unit Unit where
+          setup := do return
+
+        open A in
+        testcase Foo requires (a : FixtureA) (b : B.FixtureB) (c : B.C.FixtureC) := do
+          return
+    """
+    lake, lean = program(CODE)
+    assert lean.returncode == 0
+
+    setups = [f[0] for f in lean.results["Foo"]["setupResults"]]
+    teardowns = [f[0] for f in lean.results["Foo"]["teardownResults"]][::-1]
+
+    assert setups == teardowns
+    assert setups == ["A.FixtureA", "A.FixtureA", "A.B.FixtureB", "A.B.C.FixtureC"]
+
+
 def test_simple_result_success(program):
     """Capture the output of a standalone test without fixtures."""
     CODE = """

@@ -293,6 +293,21 @@ where
           )
     )
 
+/--
+  Create a `Term` from a `Name`.
+
+  TODO: Maybe use a coercion?
+-/
+def mkNameTerm (name : Name) : MacroM (TSyntax `term) := do
+   mk name.componentsRev
+where
+  mk (cs : List Name) : MacroM (TSyntax `term) := do
+  match cs with
+  | []        => return ← `(Name.anonymous)
+  | c::cs     =>
+    let cc ← `(Name.mkSimple $(Syntax.mkStrLit c.toString))
+    let nn ← mk cs
+    return ← `(Name.append $nn $cc)
 
 macro (name := fixtureDecl)
   doc?:optional(docComment)                         -- Documentation
@@ -310,8 +325,9 @@ macro (name := fixtureDecl)
       | none   => mkIdent `none
       | some s => Syntax.mkStrLit s.getDocString
 
-    -- Get the name as a term.
-    let nameStr : TSyntax `term ← `(Name.mkSimple $(Syntax.mkStrLit name.getId.toString))
+    -- Get the name as a term for reporting.
+    let fullName := (← Macro.getCurrNamespace) ++ name.getId
+    let nameTerm ← mkNameTerm fullName
 
     -- Check if all fields exist.
     checkFixtureFields fields
@@ -337,11 +353,10 @@ macro (name := fixtureDecl)
 
     let σ := getFixtureType stateType
     let α := getFixtureType valueType
-    let setup ← mkFixtureRunner fixtures.toList nameStr default setup teardown σ α
+    let setup ← mkFixtureRunner fixtures.toList nameTerm default setup teardown σ α
 
     let stx ← `(
       def $name : FixtureInfo $σ $α := {
-        name  := $nameStr
         doc   := $doc
         setup := $setup
       }

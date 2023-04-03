@@ -81,7 +81,6 @@ end SetupResult
   to a testcase or another fixture that depends on the fixture.
 -/
 structure FixtureInfo (σ : Type) (α : Type) where
-  name  : Name
   doc   : Option String := none
   setup : IO (SetupResult α)
 

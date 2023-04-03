@@ -14,8 +14,9 @@
 -- limitations under the License.
 --
 
-import LTest.Types
 import LTest.Instances
+import LTest.Report
+import LTest.Types
 import Lean
 import Cli
 open Lean
@@ -48,7 +49,7 @@ def captureResult {α : Type} (f : IO α) : IO (Except IO.Error α × Streams) :
 
 
 /-- Filter out tests by name. -/
-def filterTests (testcases : List (Name × TestcaseInfo)) (pattern : String) :=
+def filterTests (testcases : Array (Name × TestcaseInfo)) (pattern : String) :=
   testcases.filter fun (n, _) => f n
 where
   f (n : Name) : Bool := (n.toString.splitOn pattern |>.length) > 1
@@ -56,6 +57,9 @@ where
 
 /-- Testrunner called by the command line parser. -/
 def runTests (testcases : List (Name × TestcaseInfo)) (p : Parsed) : IO UInt32 := do
+  -- Sort testcases first by name.
+  let testcases := testcases.toArray.qsort fun a b => Name.lt a.1 b.1
+
   -- Filter testcases if the flag is specified.
   let testcases := match p.flag? "filter" with
     | some flag => filterTests testcases flag.value
@@ -74,6 +78,7 @@ def runTests (testcases : List (Name × TestcaseInfo)) (p : Parsed) : IO UInt32 
     IO.eprintln "verbose flag not implemented"
     return 1
 
+  IO.println $ ← Report.center " test session starts " '='
   for (name, info) in testcases do
     let result ← info.run
     results := results ++ [(name, result)]
