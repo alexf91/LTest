@@ -62,10 +62,10 @@ private def mkTestRunner (fixtures : List (Name × Name))
       return ($testcaseResult, $setupResults, $teardownResults)
   )
 where
-  testcaseResult  := mkIdent (`testcaseResult  |>.appendAfter "✝")
-  setupResults    := mkIdent (`setupResults    |>.appendAfter "✝")
-  teardownResults := mkIdent (`teardownResults |>.appendAfter "✝")
-  teardownFuncs   := mkIdent (`teardown        |>.appendAfter "✝")
+  testcaseResult  := mkIdent (`tr  |>.appendAfter "✝")
+  setupResults    := mkIdent (`sr  |>.appendAfter "✝")
+  teardownResults := mkIdent (`trs |>.appendAfter "✝")
+  teardownFuncs   := mkIdent (`td  |>.appendAfter "✝")
   mkTestHarness fixtures body := do
     match fixtures with
     | [] =>

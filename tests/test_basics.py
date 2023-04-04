@@ -55,3 +55,37 @@ def test_syntax_open(program):
     """
     lake, _ = program(CODE, raw=True, check_compile=False)
     lake.returncode == 0
+
+
+def test_reuse_vars_testcase(program):
+    """Reuse variable names that are used in testcase macros."""
+    varnames = ["tr", "sr", "trs", "td", "r", "fst", "cs"]
+    CODE = ""
+    for vn in varnames:
+        CODE += f"""
+            testcase {vn}Foo := do
+              let {vn} := 42
+              return
+        """
+    lake, lean = program(CODE)
+    assert lean.returncode == 0
+
+
+def test_reuse_vars_fixture(program):
+    """Reuse variable names that are used in fixture macros."""
+    varnames = ["td", "tds", "srs", "r", "cs"]
+    CODE = ""
+    for vn in varnames:
+        CODE += f"""
+            fixture {vn}Bar Unit Unit where
+              default := ()
+              setup := do
+                let {vn} := 42
+                return
+              teardown := do
+                let {vn} := 42
+                return
+            testcase {vn}Foo requires (a : {vn}Bar) := do return
+        """
+    lake, lean = program(CODE)
+    assert lean.returncode == 0
