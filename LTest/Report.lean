@@ -14,8 +14,11 @@
 -- limitations under the License.
 --
 
-set_option relaxedAutoImplicit false
+import LTest.Instances
+import Lean
+open Lean (Name)
 
+set_option relaxedAutoImplicit false
 
 namespace LTest.Report
 
@@ -29,16 +32,11 @@ def columns : IO Nat := do
   catch _ =>
     return 80
 
-
-def rep [Inhabited α] [HAppend α α α] (s : α) (n : Nat) : α := match n with
-  | 0     => default
-  | n + 1 => s ++ rep s n
-
+/-- Center the string `s` in the terminal and pad it with `c`. -/
 def center (s : String) (c : Char := ' ') : IO String := do
   let cols ← columns
   let lp := (cols - s.length) / 2
   let rp := (cols - s.length - lp)
-
-  return (rep c.toString lp) ++ s ++ (rep c.toString rp)
+  return (c.toString * lp) ++ s ++ (c.toString * rp)
 
 end LTest.Report

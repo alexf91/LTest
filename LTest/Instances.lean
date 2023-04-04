@@ -48,4 +48,15 @@ instance [ToJson α] [ToJson β] : ToJson (Except α β) where
 /- Convert the test result into a dictionary. -/
 deriving instance ToJson for TestResult
 
+/-- Repeat an object of type `α` `n` times.-/
+instance [Inhabited α] [HAppend α α α] : HMul α Nat α where
+  hMul := f
+where
+  f a n := match n with
+    | 0 => default
+    | n + 1 => (f a n) ++ a
+
+instance [Inhabited α] [HAppend α α α] : HMul Nat α α where
+  hMul n a := a * n
+
 end LTest
