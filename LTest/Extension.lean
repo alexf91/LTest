@@ -35,14 +35,14 @@ initialize testcaseExtension : SimplePersistentEnvExtension Name (List Name) ←
     addImportedFn := mkStateFromImportedEntries List.concat {}
   }
 
-syntax (name := insertTestcase) "_ltest_insert_testcase " ident : command
-syntax (name := showTestcases) "_ltest_show_testcases" : command
+scoped syntax (name := insertTestcase) "_ltest_insert_testcase " ident : command
+scoped syntax (name := showTestcases) "_ltest_show_testcases" : command
 
 /--
   Register a testcase with the extension.
 -/
 @[command_elab insertTestcase]
-def elabInsertTestcase : CommandElab := fun stx => do
+private def elabInsertTestcase : CommandElab := fun stx => do
   let name ← resolveGlobalConstNoOverload stx[1]
   modifyEnv fun env => testcaseExtension.addEntry env name
 
@@ -50,16 +50,8 @@ def elabInsertTestcase : CommandElab := fun stx => do
 /--
   Get testcases registered with the extension.
 -/
-def getTestcases : CommandElabM (Array Name) := do
+def getTestcases [Monad m] [MonadEnv m] : m (Array Name) := do
   return testcaseExtension.getState (← getEnv) |>.toArray
 
-
-/--
-  Show testcases registered with the extension.
--/
-@[command_elab showTestcases]
-def elabShowTestcases : CommandElab := fun _ => do
-  for tc in ← getTestcases do
-    IO.println tc
 
 end LTest

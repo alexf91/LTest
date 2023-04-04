@@ -366,9 +366,6 @@ macro (name := fixtureDecl)
   This can be used to compile tests and run them from the command line.
 -/
 elab "#LTestMain" : command => do
-  let env ← getEnv
-  logInfo s!"Generating LTest main function in module {env.mainModule}"
-
   let testcases ← getTestcases
 
   liftTermElabM do

@@ -49,14 +49,14 @@ def captureResult {α : Type} (f : IO α) : IO (Except IO.Error α × Streams) :
 
 
 /-- Filter out tests by name. -/
-def filterTests (testcases : Array (Name × TestcaseInfo)) (pattern : String) :=
+private def filterTests (testcases : Array (Name × TestcaseInfo)) (pattern : String) :=
   testcases.filter fun (n, _) => f n
 where
   f (n : Name) : Bool := (n.toString.splitOn pattern |>.length) > 1
 
 
 /-- Testrunner called by the command line parser. -/
-def runTests (testcases : List (Name × TestcaseInfo)) (p : Parsed) : IO UInt32 := do
+private def runTests (testcases : List (Name × TestcaseInfo)) (p : Parsed) : IO UInt32 := do
   -- Sort testcases first by name.
   let testcases := testcases.toArray.qsort fun a b => Name.lt a.1 b.1
 

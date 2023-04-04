@@ -104,6 +104,11 @@ def program(tmp_path, lakefile):
             cwd=tmp_path,
         )
 
+        # Bail out early if compilation fails. Depending on check_compile the previous
+        # command might have already raised an exception.
+        if lake.returncode != 0:
+            return lake, None
+
         # Run the program with JSON output.
         lean = sp.run(
             ["build/bin/Program", "--json-output", "results.json"],
