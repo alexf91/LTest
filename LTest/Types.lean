@@ -102,7 +102,7 @@ namespace TestResultType
 
   open Color in
   def toShortString (r : TestResultType) := match r with
-    | .success => s!"."
+    | .success => s!"{green}.{noColor}"
     | .failure => s!"{red}F{noColor}"
     | .error   => s!"{red}E{noColor}"
 end TestResultType

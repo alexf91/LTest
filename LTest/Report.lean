@@ -154,7 +154,7 @@ structure Formatter where
     let errors := results.filter   (fun (_, r) => r.type == .error)   |>.length
     let success := results.filter  (fun (_, r) => r.type == .success) |>.length
     let text ← center s!" {failures} failed, {success} passed, {errors} errors " '='
-    let color := if failures == 0 && errors == 0 then green else red
+    let color := if failures == 0 && errors == 0 then bGreen else bRed
     return s!"{color}{text}{noColor}"
 
 
