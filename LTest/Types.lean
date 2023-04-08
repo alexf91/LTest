@@ -92,6 +92,18 @@ inductive TestResultType where
   | error
   deriving Inhabited, BEq
 
+namespace TestResultType
+  def toLongString (r : TestResultType) := match r with
+    | .success => "PASSED"
+    | .failure => "FAILED"
+    | .error   => "ERROR"
+
+  def toShortString (r : TestResultType) := match r with
+    | .success => "."
+    | .failure => "F"
+    | .error   => "E"
+end TestResultType
+
 /--
   Result of a testcase.
 

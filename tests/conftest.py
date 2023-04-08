@@ -82,7 +82,9 @@ def lakefile(pytestconfig):
 def program(tmp_path, lakefile):
     """Create a lean program and compile it."""
 
-    def factory(code, check_compile=True, raw=False):
+    def factory(code, check_compile=True, raw=False, more_args=None):
+        if more_args is None:
+            more_args = []
         # Copy the toolchain file so we use the correct one.
         shutil.copy(os.path.join(TESTDIR, "..", "lean-toolchain"), tmp_path)
 
@@ -111,7 +113,7 @@ def program(tmp_path, lakefile):
 
         # Run the program with JSON output.
         lean = sp.run(
-            ["build/bin/Program", "--json-output", "results.json"],
+            ["build/bin/Program", "--json-output", "results.json"] + more_args,
             capture_output=True,
             encoding="utf8",
             cwd=tmp_path,

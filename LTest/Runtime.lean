@@ -71,51 +71,48 @@ private def runTests (testcases : List (Name × TestcaseInfo)) (p : Parsed) : IO
       IO.println name
     return 0
 
-  let mut exitcode : UInt32 := 0
+  let formatter := match p.hasFlag "verbose" with
+    | true  => Report.VerboseFormatter
+    | false => Report.ShortFormatter
+
+  -- Keep track of results and some stuff during execution for the live output.
   let mut results : List (Name × TestResult) := []
+  let mut prevPrefix : Option Name := none
 
-  if p.hasFlag "verbose" then
-    IO.eprintln "verbose flag not implemented"
-    return 1
-
-  IO.println $ ← Report.center " test session starts " '='
+  -- Live part of the testrunner.
+  IO.println $ ← formatter.liveHeader
   for (name, info) in testcases do
+    if prevPrefix != name.getPrefix then
+      if prevPrefix.isSome then
+        IO.print $ ← formatter.liveNewPrefixSep
+      IO.print $ ← formatter.liveNewPrefix name.getPrefix
+    prevPrefix := name.getPrefix
+
+    IO.print $ ← formatter.liveResultStart name
+    (← IO.getStdout).flush
     let result ← info.run
     results := results ++ [(name, result)]
+    IO.print $ ← formatter.liveResultFinish name result
 
-    if result.type == .error then
-      exitcode := 1
-      IO.println s!"[ERROR] {name}"
+    if result.type != .success && p.hasFlag "exitfirst" then
+      break
 
-      if !result.setupErrors.isEmpty then
-        IO.println "setup error:"
-        for (name, (err, streams)) in result.setupErrors do
-          IO.println s!"{name}: {err}"
+  IO.print $ ← formatter.liveFooter
 
-      if !result.teardownErrors.isEmpty then
-        IO.println "teardown errors:"
-        for (name, (err, streams)) in result.teardownErrors do
-          IO.println s!"{name}: {err}"
-
-      if p.hasFlag "exitfirst" then
-        break
-
-    else if result.type == .failure then
-      exitcode := 1
-      IO.println s!"[FAIL] {name}: {result.testcaseResult.get!.error!.1}"
-
-      if p.hasFlag "exitfirst" then
-        break
-
-    else
-      IO.println s!"[PASS] {name}"
+  -- Static part at the end. This all happens after all tests were run.
+  IO.print $ ← formatter.captures results
+  IO.print $ ← formatter.summary results
+  IO.print $ ← formatter.finalFooter results
 
   -- Write the JSON output.
   if let some path := p.flag? "json-output" then
     let r := toJson results
     IO.FS.writeFile path.value r.pretty
 
-  return exitcode
+  -- Determine the exitcode.
+  if results.any fun (_, r) => r.type != .success then
+    return 1
+  return 0
 
 
 /-- Parser for the test runner. -/

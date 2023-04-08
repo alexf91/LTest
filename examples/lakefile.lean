@@ -24,5 +24,6 @@ package Example {
 
 require LTest from ".."
 
-@[default_target]
-lean_exe Example
+lean_exe Success
+lean_exe Errors
+lean_exe Failures

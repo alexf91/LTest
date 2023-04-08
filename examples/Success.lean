@@ -59,5 +59,18 @@ testcase testOne requires (n : One) := do
   assertTrue (n == 1)
 
 
+/-
+  Tests can be defined in namespaces for easier selection and grouping.
+  Before execution, tests are sorted by their fully qualified name.
+-/
+namespace Foo
+  testcase testHam := do
+    return
+
+  testcase testEggs := do
+    return
+end Foo
+
+
 /-! Generate the main function. -/
 #LTestMain
