@@ -22,8 +22,11 @@ package Example {
   precompileModules := true
 }
 
+lean_lib Library
+
 require LTest from ".."
 
 lean_exe Success
 lean_exe Errors
 lean_exe Failures
+lean_exe WithLibrary
