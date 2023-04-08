@@ -15,8 +15,10 @@
 --
 
 import LTest.Instances
+import LTest.Colors
 import Lean
 open Lean (Name)
+open LTest.Color
 
 set_option relaxedAutoImplicit false
 
@@ -74,7 +76,9 @@ private def formatCaptureError (e : CaptureError) : IO String := do
 -/
 structure Formatter where
   /-- Header for the live section of the report. -/
-  liveHeader : IO String := center " test session starts " '='
+  liveHeader : IO String := do
+    let text ← center " test session starts " '='
+    return s!"{bWhite}{text}{noColor}"
 
   /-- Separator string printed between two namespaces. -/
   liveNewPrefixSep : IO String := do return ""
@@ -104,18 +108,21 @@ structure Formatter where
       out := out ++ (← center " ERRORS " '=')
       for (name, result) in errors do
         for (fixture, e) in result.setupErrors do
-          out := out ++ (← center s!" error in setup of {fixture} for {name} " '_') ++ "\n"
+          let text ← center s!" ERROR at setup of {fixture} for {name} " '_'
+          out := out ++ s!"{bRed}{text}{noColor}" ++ "\n"
           out := out ++ (← formatCaptureError e)
 
         for (fixture, e) in result.teardownErrors do
-          out := out ++ (← center s!" error in teardown of {fixture} for {name} " '_') ++ "\n"
+          let text ← center s!" ERROR at teardown of {fixture} for {name} " '_'
+          out := out ++ s!"{bRed}{text}{noColor}" ++ "\n"
           out := out ++ (← formatCaptureError e)
 
     unless failures.isEmpty do
       out := out ++ (← center " FAILURES " '=')
       for (name, result) in failures do
         assert! result.setupErrors.isEmpty && result.teardownErrors.isEmpty
-        out := out ++ (← center s!" {name} " '_') ++ "\n"
+        let text ← center s!" {name} " '_'
+        out := out ++ s!"{bRed}{text}{noColor}" ++ "\n"
         out := out ++ (← formatCaptureError result.testcaseResult.get!.error!)
 
     return out
@@ -128,7 +135,8 @@ structure Formatter where
     let failures := results.filter (fun (_, r) => r.type == .failure)
     let errors   := results.filter (fun (_, r) => r.type == .error)
 
-    let mut out ← center " short test summary info " '='
+    let text ← center " short test summary info " '='
+    let mut out := s!"{bCyan}{text}{noColor}"
     for (name, result) in failures do
       let e := result.testcaseResult.get!.error!.1
       out := out ++ s!"{result.type.toLongString} {name} - {e}\n"
@@ -145,7 +153,9 @@ structure Formatter where
     let failures := results.filter (fun (_, r) => r.type == .failure) |>.length
     let errors := results.filter   (fun (_, r) => r.type == .error)   |>.length
     let success := results.filter  (fun (_, r) => r.type == .success) |>.length
-    center s!" {failures} failed, {success} passed, {errors} errors " '='
+    let text ← center s!" {failures} failed, {success} passed, {errors} errors " '='
+    let color := if failures == 0 && errors == 0 then green else red
+    return s!"{color}{text}{noColor}"
 
 
 /-- Formatter for verbose output. -/

@@ -14,6 +14,7 @@
 -- limitations under the License.
 --
 
+import LTest.Colors
 import Lean
 import Cli
 open Lean
@@ -93,15 +94,17 @@ inductive TestResultType where
   deriving Inhabited, BEq
 
 namespace TestResultType
+  open Color in
   def toLongString (r : TestResultType) := match r with
-    | .success => "PASSED"
-    | .failure => "FAILED"
-    | .error   => "ERROR"
+    | .success => s!"{green}PASSED{noColor}"
+    | .failure => s!"{red}FAILED{noColor}"
+    | .error   => s!"{red}ERROR{noColor}"
 
+  open Color in
   def toShortString (r : TestResultType) := match r with
-    | .success => "."
-    | .failure => "F"
-    | .error   => "E"
+    | .success => s!"."
+    | .failure => s!"{red}F{noColor}"
+    | .error   => s!"{red}E{noColor}"
 end TestResultType
 
 /--
