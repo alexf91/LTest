@@ -11,10 +11,8 @@ It is heavily inspired by [`pytest`](https://docs.pytest.org/) and [`rstest`](ht
 Fixtures are structures with a default state, a setup function and a teardown function.
 They can depend on other fixtures. The value of dependencies is available in the setup function.
 
-If `AnotherFixture` has type `Fixture Foo Bar`, then `n` with type `Bar` is available in the
-setup function.
-Both `setup` and `teardown` are executed in the `StateM Foo` monad to keep track of their state
-and the `IO` monad to allow access to the environment.
+The following example defines a fixture `NatFixture` with a state of type `Nat` and a value of type `Nat`.
+It depends on `AnotherFixture`.
 
 ```Lean
 fixture NatFixture Nat Nat requires (n : AnotherFixture) where
@@ -26,12 +24,12 @@ fixture NatFixture Nat Nat requires (n : AnotherFixture) where
 ```
 
 In the `setup` function, the state is set to `default`. It can then be changed and queried
-with the functions of the `StateM` monad.
+with the functions of the `StateM` monad (`set`, `get`, ...).
 
 
 ## Testcases
 
-Testcases are essentially functions with a return value `IO Unit`, but they can depend
+Testcases are essentially functions of type `IO Unit`, but they can depend
 on fixtures. The value of a setup function is available in a testcases and their
 teardown-function is executed when the test finishes.
 
@@ -47,3 +45,9 @@ testcase testSomething requires (a : FixtureA) (b : FixtureB) := do
 For now, testsuites are compiled and executed as regular programs.
 The `main` function is created with the `#LTestMain` command, which has to be called exactly once.
 See the `examples` directory for more information.
+
+```Lean
+import LTest
+
+#LTestMain
+```
