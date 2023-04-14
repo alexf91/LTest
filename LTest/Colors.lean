@@ -41,11 +41,12 @@ inductive Color where
   | bWhite
   | noColor
 
-/-- Start of the escape sequence (`\033`). -/
-private def ESC := String.fromUTF8Unchecked $ .mk #[0x1b]
 
-instance : ToString Color where
-  toString
+namespace Color
+  /-- Start of the escape sequence (`\033`). -/
+  private def ESC := String.fromUTF8Unchecked $ .mk #[0x1b]
+  /-- Convert a color to a terminal escape sequence. -/
+  def ansiEscape (c : Color) : String := match c with
     | .black   => ESC ++ "[0;30m"
     | .red     => ESC ++ "[0;31m"
     | .green   => ESC ++ "[0;32m"
@@ -63,5 +64,6 @@ instance : ToString Color where
     | .bCyan   => ESC ++ "[1;36m"
     | .bWhite  => ESC ++ "[1;37m"
     | .noColor => ESC ++ "[0m"
+end Color
 
 end LTest

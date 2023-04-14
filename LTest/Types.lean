@@ -94,17 +94,21 @@ inductive TestResultType where
   deriving Inhabited, BEq
 
 namespace TestResultType
-  open Color in
   def toLongString (r : TestResultType) := match r with
-    | .success => s!"{green}PASSED{noColor}"
-    | .failure => s!"{red}FAILED{noColor}"
-    | .error   => s!"{red}ERROR{noColor}"
+    | .success => "PASSED"
+    | .failure => "FAILED"
+    | .error   => "ERROR"
 
-  open Color in
   def toShortString (r : TestResultType) := match r with
-    | .success => s!"{green}.{noColor}"
-    | .failure => s!"{red}F{noColor}"
-    | .error   => s!"{red}E{noColor}"
+    | .success => "."
+    | .failure => "F"
+    | .error   => "E"
+
+  def toColor (r : TestResultType) : Color := match r with
+    | .success => .green
+    | .failure => .red
+    | .error   => .red
+
 end TestResultType
 
 /--

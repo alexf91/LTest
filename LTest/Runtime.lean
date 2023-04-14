@@ -72,8 +72,12 @@ private def runTests (testcases : List (Name × TestcaseInfo)) (p : Parsed) : IO
     return 0
 
   let formatter := match p.hasFlag "verbose" with
-    | true  => Report.VerboseFormatter
-    | false => Report.ShortFormatter
+    | true  => VerboseFormatter
+    | false => ShortFormatter
+
+  let formatter := match p.hasFlag "no-color" with
+    | true  => {formatter with colorMap := fun _ => ""}
+    | false => formatter
 
   -- Keep track of results and some stuff during execution for the live output.
   let mut results : List (Name × TestResult) := []
@@ -92,7 +96,7 @@ private def runTests (testcases : List (Name × TestcaseInfo)) (p : Parsed) : IO
     (← IO.getStdout).flush
     let result ← info.run
     results := results ++ [(name, result)]
-    IO.print $ ← formatter.liveResultFinish name result
+    IO.print $ ← formatter.liveResultFinish result
 
     if result.type != .success && p.hasFlag "exitfirst" then
       break
@@ -127,6 +131,7 @@ private def parseCommand (testcases : List (Name × TestcaseInfo)) : Cmd := `[Cl
     "v", "verbose";         "Increase verbosity"
     "k", "filter" : String; "Only run tests which contain the given substring. " ++
                             "The match is performed on the full dotted name."
+    "no-color";             "Disable colorized output"
 ]
 
 /--
