@@ -30,3 +30,4 @@ lean_exe Success
 lean_exe Errors
 lean_exe Failures
 lean_exe WithLibrary
+lean_exe Stateful
