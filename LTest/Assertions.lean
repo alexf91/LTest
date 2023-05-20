@@ -19,14 +19,17 @@ set_option relaxedAutoImplicit false
 
 namespace LTest
 
+/-- Assert that the proposition `p` is true. -/
 def assertTrue (p : Bool) (msg : String := "assertion failed") : IO Unit := do
   unless p do
     throw $ IO.userError msg
 
+/-- Assert that the proposition `p` is false. -/
 def assertFalse (p : Bool) (msg : String := "assertion failed") : IO Unit := do
   unless !p do
     throw $ IO.userError msg
 
+/-- Assert that `a` is equal to `b`. -/
 def assertEqual [BEq α] (a : α) (b : α) (msg : String := "assertion failed") : IO Unit := do
   unless a == b do
     throw $ IO.userError msg

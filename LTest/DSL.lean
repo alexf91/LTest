@@ -40,6 +40,7 @@ def fixtureDependency := leading_parser
   Create the testrunner.
 
   This creates the runner for the testcase itself and the setup and teardown code of fixtures.
+  The transformed function has type `IO TestResult`.
 -/
 private def mkTestRunner (fixtures : List (Name × Name))
                          (body : Term) : MacroM Term := do
@@ -96,22 +97,20 @@ where
     )
 
 /--
-  Declare a testcase.
+  Create a testcase.
 
-  The testcase declaration is transformed into a function that calls the appropriate fixture
-  code and returns a result.
-  The transformed function has type `IO TestResult`.
-
-  We abuse some of the syntax here, as the type of fixture arguments is really a structure
-  and not a Type. This makes testcase declarations look like function definitions.
-  A testcase has type `IO Unit`.
+  The testcase must have type `IO Unit` and can depend on fixtures.
+  Before running the testcase, the `setup` function of the fixtures is called in the order
+  they appear in the requirements.
+  After the testcase finishes, the `teardown` functions of the fixtures are called in reverse
+  order.
 
   A testcase definition looks like this:
   ```
   testcase test_something requires (a : FixtureA) (b : FixtureB) := do
     return
   ```
-  The fixture part can be omitted if the testcase has no dependencies.
+  Fixture requirements can be omitted if the testcase has no dependencies.
 -/
 macro (name := testcaseDecl)
   doc?:optional(docComment)                         -- Documentation
@@ -156,31 +155,16 @@ macro (name := testcaseDecl)
     return stx
 
 
-/--
-  Declare a fixture.
-
-  Fixtures are more complicated than testcases, because they include a state,
-  a setup function and a teardown function.
-  It looks more like a structure definition, but with optional dependencies on other
-  fixtures.
-
-  The following code defines a fixture `FixtureC` with a state type `σ` and a value type `α`.
-  It depends on `FixtureA` and `FixtureB`.
-
-  ```
-  fixture FixtureC σ α requires (a : FixtureA) (b : FixtureB) where
-    default  := (object of type σ)
-    setup    := do return (object of type α)
-    teardown := do return
-  ```
--/
+/-- A single fixture field. -/
 def fixtureBinder := leading_parser
   ident >> Term.binderDefault
 
+/-- All fixture fields (similar to structures). -/
 def fixtureFields := leading_parser
   manyIndent <|
     ppLine >> checkColGe >> ppGroup fixtureBinder
 
+/-- The type specification of the fixture state and value. -/
 def fixtureType := leading_parser
   ("(" >> termParser >> ")") <|> (ident)
 
@@ -306,6 +290,32 @@ where
     let cc ← `(Name.mkSimple $(Syntax.mkStrLit c.toString))
     return ← `(Name.append $(← mk cs) $cc)
 
+/--
+  Declare a fixture.
+
+  Fixtures are more complicated than testcases, because they include a default state,
+  a setup function and a teardown function.
+  It looks more like a structure definition, but with optional dependencies on other
+  fixtures.
+
+  The following code defines a fixture `FixtureC` with a state type `σ` and a value type `α`.
+  It depends on `FixtureA` and `FixtureB`.
+
+  ```
+  fixture FixtureC σ α requires (a : FixtureA) (b : FixtureB) where
+    default  := (object of type σ)
+    setup    := do return (object of type α)
+    teardown := do return
+  ```
+
+  Only `setup` is required unless the instance `Inhabited σ` does not exist. Then `default`
+  has to be set.
+
+  In the `setup` function, `a` and `b` are available as regular variables. Their type is the value
+  type of `FixtureA` and `FixtureB`.
+  The state of the fixture can be accessed in `setup` and `teardown` with functions of the
+  [`StateM`](https://leanprover.github.io/lean4/doc/monads/states.lean.html) monad.
+-/
 macro (name := fixtureDecl)
   doc?:optional(docComment)                         -- Documentation
   "fixture"                                         -- Command name
