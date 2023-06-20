@@ -33,19 +33,25 @@ namespace LTest
   Basic syntax elements used for the DSL.
 -/
 def fixtureDependency := leading_parser
-  "(" >> (ident <|> Term.hole) >> ":" >> ident >> ")"
+  ("(" >> (ident <|> Term.hole) >> ":" >> ident >> ")") <|> ident
 
 /--
   Get fixture dependencies as `(Name × Name)` tuples.
 
   In addition to parsing names, this also adds a inaccessible variable for
   placeholders. This allows us to discard the result.
+
+  TODO: Improve parsing
 -/
 def getFixtureTuples (stx : Syntax) : Array (Name × Name) :=
+  let anonName := `_ |>.appendAfter "✝"
   stx.getArgs.map fun arg =>
-    match arg[1] with
-    | `(_) => (`_ |>.appendAfter "✝", arg[3].getId)
-    | _    => (arg[1].getId, arg[3].getId)
+    if arg.getNumArgs == 5 then
+      match arg[1] with
+      | `(_) => (anonName, arg[3].getId)
+      | _    => (arg[1].getId, arg[3].getId)
+    else
+      (anonName, arg[0].getId)
 
 
 /--
