@@ -33,7 +33,19 @@ namespace LTest
   Basic syntax elements used for the DSL.
 -/
 def fixtureDependency := leading_parser
-  "(" >> ident >> ":" >> ident >> ")"
+  "(" >> (ident <|> Term.hole) >> ":" >> ident >> ")"
+
+/--
+  Get fixture dependencies as `(Name × Name)` tuples.
+
+  In addition to parsing names, this also adds a inaccessible variable for
+  placeholders. This allows us to discard the result.
+-/
+def getFixtureTuples (stx : Syntax) : Array (Name × Name) :=
+  stx.getArgs.map fun arg =>
+    match arg[1] with
+    | `(_) => (`_ |>.appendAfter "✝", arg[3].getId)
+    | _    => (arg[1].getId, arg[3].getId)
 
 
 /--
@@ -119,8 +131,7 @@ macro (name := testcaseDecl)
   fixtures?:optional("requires" fixtureDependency+) -- Fixture arguments
   ":=" body:term : command => do
     -- Get fixture requirements as `(Name × Name)` tuples.
-    let fixtures := fixtures?.raw[1].getArgs.map fun arg =>
-      (arg[1].getId, arg[3].getId)
+    let fixtures := getFixtureTuples fixtures?.raw[1]
 
     -- Wrap the test body in a try/catch block and then create the surrounding fixture block,
     -- also in nested try/catch blocks.
@@ -355,8 +366,7 @@ macro (name := fixtureDecl)
     let teardown := getField `teardown $ ← `(default)
 
     -- Get fixture requirements as `(Name × Name)` tuples.
-    let fixtures :=  fixtures?.raw[1].getArgs.map fun arg =>
-      (arg[1].getId, arg[3].getId)
+    let fixtures := getFixtureTuples fixtures?.raw[1]
 
     let σ := getFixtureType stateType
     let α := getFixtureType valueType

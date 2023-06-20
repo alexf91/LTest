@@ -542,3 +542,75 @@ def test_nested_teardown_fail(program):
     lake, lean = program(CODE)
     assert lean.returncode == 1
     assert lean.trace == TRACE
+
+
+def test_anonymous_dependency_testcase(program):
+    """A simple trace with anonymous names."""
+    CODE = """
+        fixture A Unit Unit where
+          default  := ()
+          setup    := do trace "A.setup"
+          teardown := do trace "A.teardown"
+
+        fixture B Unit Unit where
+          default  := ()
+          setup    := do trace "B.setup"
+          teardown := do trace "B.teardown"
+
+        fixture C Unit Unit where
+          default  := ()
+          setup    := do trace "C.setup"
+          teardown := do trace "C.teardown"
+
+        testcase Foo requires (_ : A) (b : B) (_ : C) := do
+          trace "testcase"
+    """
+    TRACE = [
+        "A.setup",
+        "B.setup",
+        "C.setup",
+        "testcase",
+        "C.teardown",
+        "B.teardown",
+        "A.teardown",
+    ]
+
+    lake, lean = program(CODE)
+    assert lean.returncode == 0
+    assert lean.trace == TRACE
+
+
+def test_anonymous_dependency_fixture(program):
+    """A simple trace with anonymous names."""
+    CODE = """
+        fixture A Unit Unit where
+          default  := ()
+          setup    := do trace "A.setup"
+          teardown := do trace "A.teardown"
+
+        fixture B Unit Unit where
+          default  := ()
+          setup    := do trace "B.setup"
+          teardown := do trace "B.teardown"
+
+        fixture C Unit Unit requires (_ : A) (_ : B) where
+          default  := ()
+          setup    := do trace "C.setup"
+          teardown := do trace "C.teardown"
+
+        testcase Foo requires (_ : C) := do
+          trace "testcase"
+    """
+    TRACE = [
+        "A.setup",
+        "B.setup",
+        "C.setup",
+        "testcase",
+        "C.teardown",
+        "B.teardown",
+        "A.teardown",
+    ]
+
+    lake, lean = program(CODE)
+    assert lean.returncode == 0
+    assert lean.trace == TRACE
