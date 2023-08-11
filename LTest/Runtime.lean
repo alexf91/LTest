@@ -104,7 +104,8 @@ private def runTests (testcases : List (Name × TestcaseInfo)) (p : Parsed) : IO
   IO.print $ ← formatter.liveFooter
 
   -- Static part at the end. This all happens after all tests were run.
-  IO.print $ ← formatter.captures results
+  let showSuccess := p.hasFlag "show-captures"
+  IO.print $ ← formatter.captures showSuccess results
   IO.print $ ← formatter.summary results
   IO.print $ ← formatter.finalFooter results
 
@@ -132,6 +133,7 @@ private def parseCommand (testcases : List (Name × TestcaseInfo)) : Cmd := `[Cl
     "k", "filter" : String; "Only run tests which contain the given substring. " ++
                             "The match is performed on the full dotted name."
     "no-color";             "Disable colorized output"
+    "show-captures";        "Show captured output for all tests"
 ]
 
 /--

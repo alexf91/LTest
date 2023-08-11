@@ -50,16 +50,23 @@ private def shorten (s : String) : IO String := do
 
 
 /-- Format a capture error for reporting. -/
-private def formatCaptureError (e : CaptureError) : IO String := do
-  let (err, streams) := e
+private def formatStreams (streams : Streams) : IO String := do
   let mut out := ""
-  out := out ++ s!"Exception: {err}\n\n"
   unless streams.stdout.isEmpty do
     out := out ++ (← center s!" captured stdout " '-') ++ "\n"
     out := out ++ String.fromUTF8Unchecked streams.stdout ++ "\n"
   unless streams.stderr.isEmpty do
     out := out ++ (← center s!" captured stderr " '-') ++ "\n"
     out := out ++ String.fromUTF8Unchecked streams.stderr ++ "\n"
+  return out
+
+
+/-- Format captureError for reporting. -/
+private def formatCaptureError (e : CaptureError) : IO String := do
+  let (err, streams) := e
+  let mut out := ""
+  out := out ++ s!"Exception: {err}\n\n"
+  out := out ++ (← formatStreams streams)
   return out
 
 
@@ -129,10 +136,19 @@ namespace Formatter
     return s!"{fmt.colorMap result.type.toColor}{text}{fmt.colorMap noColor}"
 
   /-- Reports for failures or errors. -/
-  def captures (fmt : Formatter) (results : List (Name × TestResult)) : IO String := do
-    let errors   := results.filter (fun (_, r) => r.type == .error)
-    let failures := results.filter (fun (_, r) => r.type == .failure)
+  def captures (fmt : Formatter) (showSuccess : Bool) (results : List (Name × TestResult)) : IO String := do
+    let errors    := results.filter (fun (_, r) => r.type == .error)
+    let failures  := results.filter (fun (_, r) => r.type == .failure)
+    let successes := results.filter (fun (_, r) => r.type == .success)
     let mut out := ""
+
+    unless successes.isEmpty || !showSuccess do
+      out := out ++ (← center " SUCCESS " '=')
+      for (name, result) in successes do
+        assert! result.setupErrors.isEmpty && result.teardownErrors.isEmpty
+        let text ← center s!" {name} " '_'
+        out := out ++ s!"{fmt.colorMap bGreen}{text}{fmt.colorMap noColor}" ++ "\n"
+        out := out ++ (← formatStreams result.testcaseResult.get!.ok!)
 
     unless errors.isEmpty do
       out := out ++ (← center " ERRORS " '=')
