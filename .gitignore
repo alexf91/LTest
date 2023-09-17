@@ -1,4 +1,5 @@
 build
+lakefile.olean
 lake-packages
 lake-manifest.json
 *.pyc
