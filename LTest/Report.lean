@@ -25,11 +25,13 @@ set_option relaxedAutoImplicit false
 namespace LTest
 
 /-- Get the number of columns in the terminal. -/
+-- TODO: Use something other than tput. pytest adjusts columns to 80
+--       when redirection to a file is used.
 private def columns : IO Nat := do
   try
     let out ← IO.Process.run {cmd := "tput", args := #["cols"]}
     match out.trim.toNat? with
-    | some n => return n
+    | some n => return (n - 1)
     | _      => return 80
   catch _ =>
     return 80
@@ -143,7 +145,7 @@ namespace Formatter
     let mut out := ""
 
     unless successes.isEmpty || !showSuccess do
-      out := out ++ (← center " SUCCESS " '=')
+      out := out ++ (← center " SUCCESS " '=') ++ "\n"
       for (name, result) in successes do
         assert! result.setupErrors.isEmpty && result.teardownErrors.isEmpty
         let text ← center s!" {name} " '_'
@@ -151,7 +153,7 @@ namespace Formatter
         out := out ++ (← formatStreams result.testcaseResult.get!.ok!)
 
     unless errors.isEmpty do
-      out := out ++ (← center " ERRORS " '=')
+      out := out ++ (← center " ERRORS " '=') ++ "\n"
       for (name, result) in errors do
         for (fixture, e) in result.setupErrors do
           let text ← center s!" ERROR at setup of {fixture} for {name} " '_'
@@ -164,7 +166,7 @@ namespace Formatter
           out := out ++ (← formatCaptureError e)
 
     unless failures.isEmpty do
-      out := out ++ (← center " FAILURES " '=')
+      out := out ++ (← center " FAILURES " '=') ++ "\n"
       for (name, result) in failures do
         assert! result.setupErrors.isEmpty && result.teardownErrors.isEmpty
         let text ← center s!" {name} " '_'
@@ -183,7 +185,7 @@ namespace Formatter
     let errors   := results.filter (fun (_, r) => r.type == .error)
 
     let text ← center " short test summary info " '='
-    let mut out := s!"{fmt.colorMap bCyan}{text}{fmt.colorMap noColor}"
+    let mut out := s!"{fmt.colorMap bCyan}{text}{fmt.colorMap noColor}\n"
     for (name, result) in failures do
       let e := result.testcaseResult.get!.error!.1
       let r := s!"{fmt.colorMap result.type.toColor}{result.type.toLongString}{fmt.colorMap noColor}"
@@ -205,7 +207,7 @@ namespace Formatter
     let success := results.filter  (fun (_, r) => r.type == .success) |>.length
     let text ← center s!" {failures} failed, {success} passed, {errors} errors " '='
     let color := if failures == 0 && errors == 0 then bGreen else bRed
-    return s!"{fmt.colorMap color}{text}{fmt.colorMap noColor}"
+    return s!"{fmt.colorMap color}{text}{fmt.colorMap noColor}\n"
 
 end Formatter
 
